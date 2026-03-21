@@ -11,9 +11,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "electron": "npm run build && electron .",
-    "dist:mac": "npm run build && electron-builder --mac --arm64 --x64",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:all": "npm run build && electron-builder --mac --win"
+    "dist:mac": "npm run build && electron-builder --mac --arm64 --x64 --publish never",
+    "dist:win": "npm run build && electron-builder --win --publish never",
+    "dist:all": "npm run build && electron-builder --mac --win --publish never"
   },
   "dependencies": {
     "react": "^19.2.4",
