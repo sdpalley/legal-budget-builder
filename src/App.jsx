@@ -1113,7 +1113,7 @@ export default function App() {
   const savedMode = saved.current?.mode || null;
   const defaultType = savedMode === "corporate" ? "ma_strategic" : savedMode === "tax" ? "irs_audit" : "arbitration";
 
-  const [mode, setMode] = useState(savedMode);
+  const [mode, setMode] = useState(null); // always start at landing page
   const [acknowledged, setAcknowledged] = useState(false);
   const [step, setStep] = useState(1);
   const [matter, setMatter] = useState(saved.current?.matter || { name: "", client: "", type: defaultType, duration: "", jurisdiction: "", description: "", dealValue: "" });
