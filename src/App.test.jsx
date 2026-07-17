@@ -1,17 +1,16 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import App, { buildPhases, parseDurationMonths } from "./App.jsx";
+
+const ACKNOWLEDGEMENT =
+  "I understand that drafts are stored locally on this device, optional AI actions can transmit budget details, and I will only enter anonymized or sample data.";
 
 async function enterLitigationWizard(user) {
   render(<App />);
   await user.click(screen.getByText("Litigation & Dispute Resolution"));
-  await user.click(
-    screen.getByRole("checkbox", {
-      name: "I understand that this is a demonstration tool and I will only enter anonymized or sample data.",
-    }),
-  );
+  await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
   await user.click(screen.getByRole("button", { name: "Continue →" }));
 }
 
@@ -70,15 +69,114 @@ describe("primary wizard workflow", () => {
     const continueButton = screen.getByRole("button", { name: "Continue →" });
     expect(continueButton).toBeDisabled();
 
-    await user.click(
-      screen.getByRole("checkbox", {
-        name: "I understand that this is a demonstration tool and I will only enter anonymized or sample data.",
-      }),
-    );
+    await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
     expect(continueButton).toBeEnabled();
 
     await user.click(continueButton);
     expect(screen.getByText("Matter Information")).toBeInTheDocument();
+  });
+
+  it("resumes a saved draft without resetting its matter data", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(
+      "lb_session",
+      JSON.stringify({
+        mode: "litigation",
+        matter: { name: "Resume me", type: "arbitration" },
+        phases: buildPhases("arbitration", "litigation"),
+        timekeepers: [],
+        contingency: 100000,
+        feeType: "hourly",
+        caveats: [],
+        timelineMode: "auto",
+        phaseTimeline: {},
+        savedAt: 123456,
+      }),
+    );
+
+    render(<App />);
+    expect(screen.getByText("Resume me")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Resume draft" }));
+    await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
+    await user.click(screen.getByRole("button", { name: "Continue →" }));
+
+    expect(screen.getByPlaceholderText("e.g. Smith v. Jones")).toHaveValue(
+      "Resume me",
+    );
+  });
+
+  it("clears a saved draft from the landing page", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(
+      "lb_session",
+      JSON.stringify({
+        mode: "litigation",
+        matter: { name: "Discard me", type: "arbitration" },
+        phases: buildPhases("arbitration", "litigation"),
+        timekeepers: [],
+        contingency: 100000,
+        feeType: "hourly",
+        caveats: [],
+      }),
+    );
+
+    render(<App />);
+    await user.click(screen.getByRole("button", { name: "Clear saved draft" }));
+
+    expect(localStorage.getItem("lb_session")).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Resume draft" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Saved draft cleared from this device.",
+    );
+  });
+
+  it("requires deliberate confirmation before replacing a saved draft", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(
+      "lb_session",
+      JSON.stringify({
+        mode: "litigation",
+        matter: { name: "Keep me", type: "arbitration" },
+        phases: buildPhases("arbitration", "litigation"),
+        timekeepers: [],
+        contingency: 100000,
+        feeType: "hourly",
+        caveats: [],
+      }),
+    );
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(<App />);
+    await user.click(screen.getByText("Corporate & Transactional"));
+    expect(screen.getByText("Keep me")).toBeInTheDocument();
+    expect(localStorage.getItem("lb_session")).not.toBeNull();
+
+    confirm.mockReturnValue(true);
+    await user.click(screen.getByText("Corporate & Transactional"));
+    expect(localStorage.getItem("lb_session")).toBeNull();
+    expect(screen.getByText("Before You Continue")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
+    await user.click(screen.getByRole("button", { name: "Continue →" }));
+    expect(screen.getByText("Corporate Budget Builder")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("e.g. Project Falcon")).toHaveValue("");
+  });
+
+  it("offers recovery when saved data is corrupt", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("lb_session", "{invalid json");
+
+    render(<App />);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "The saved draft could not be read.",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Start clean" }));
+    expect(localStorage.getItem("lb_session")).toBeNull();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("persists matter edits locally and navigates all six steps", async () => {

@@ -1,5 +1,10 @@
 /* eslint-disable react-refresh/only-export-components -- helpers stay here until the tested domain extraction batch */
 import { useState, useEffect, useRef } from "react";
+import {
+  clearDraft,
+  readDraft,
+  writeDraft,
+} from "./domain/draftStorage.js";
 
 // ── Phase Library ─────────────────────────────────────────────────────────────
 
@@ -999,7 +1004,11 @@ function LandingCard({ title, sub, icon, onClick }) {
   );
 }
 
-function LandingPage({ onSelect }) {
+function LandingPage({ onSelect, onResume, onClear, draft, draftStatus, storageMessage }) {
+  const draftName = draft?.matter?.name || draft?.matter?.client || "Untitled budget";
+  const trackName = draft?.mode === "corporate" ? "Corporate & Transactional" : draft?.mode === "tax" ? "Tax" : "Litigation & Dispute Resolution";
+  const savedAt = draft?.savedAt ? new Date(draft.savedAt).toLocaleString() : "Recently";
+
   return (
     <div style={{fontFamily:"Georgia,'Times New Roman',serif",minHeight:"100vh",background:"linear-gradient(-45deg,#1a2a4a,#0d3d52,#1e3348,#0a4a5c,#2d3d52)",backgroundSize:"400% 400%",animation:"gradientShift 16s ease infinite"}}>
       <style>{`
@@ -1018,6 +1027,32 @@ function LandingPage({ onSelect }) {
           <div style={{fontSize:26,fontWeight:400,color:"#fff",marginBottom:12,letterSpacing:"0.01em"}}>Select a budgeting track</div>
           <div style={{fontSize:14,fontFamily:"sans-serif",color:"rgba(255,255,255,0.6)"}}>Choose the type of engagement to begin building your fee estimate.</div>
         </div>
+        {draft && (
+          <div style={{background:"rgba(255,255,255,0.96)",border:"1px solid rgba(255,255,255,0.5)",borderRadius:6,padding:"20px 24px",marginBottom:24,display:"flex",alignItems:"center",gap:20,justifyContent:"space-between",flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontSize:11,fontFamily:"sans-serif",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",color:ACCENT,marginBottom:6}}>Saved on this device</div>
+              <div style={{fontSize:18,color:N,marginBottom:4}}>{draftName}</div>
+              <div style={{fontSize:12,fontFamily:"sans-serif",color:MUTED}}>{trackName} · {savedAt}</div>
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <button onClick={onResume} style={s.btn(true)}>Resume draft</button>
+              <button onClick={onClear} style={s.btn(false)}>Clear saved draft</button>
+            </div>
+          </div>
+        )}
+        {draftStatus === "corrupt" && !draft && (
+          <div role="alert" style={{background:"#fff7ed",border:"1px solid #d9a45f",borderRadius:6,padding:"18px 22px",marginBottom:24,display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+            <div style={{fontSize:13,fontFamily:"sans-serif",color:"#6f3d0a",lineHeight:1.5}}>
+              The saved draft could not be read. Start clean to recover the application.
+            </div>
+            <button onClick={onClear} style={s.btn(false)}>Start clean</button>
+          </div>
+        )}
+        {storageMessage && (
+          <div role="status" style={{fontSize:12,fontFamily:"sans-serif",color:"#fff",background:"rgba(0,0,0,0.22)",borderRadius:4,padding:"10px 14px",marginBottom:20}}>
+            {storageMessage}
+          </div>
+        )}
         <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
           <LandingCard
             title="Litigation & Dispute Resolution"
@@ -1057,9 +1092,9 @@ function DisclaimerPage({ onAccept, onBack }) {
         <div style={{background:"#fff",border:`1px solid ${BORDER}`,borderRadius:6,padding:"40px 44px"}}>
           <div style={{fontSize:13,fontFamily:"sans-serif",letterSpacing:"0.1em",textTransform:"uppercase",color:MUTED,fontWeight:600,marginBottom:20}}>Before You Continue</div>
           <div style={{fontSize:15,color:N,lineHeight:1.8,marginBottom:28}}>
-            This is a testing site for demonstration purposes only. Nothing you enter is stored or transmitted to a server. <strong>Nothing will be saved!</strong>
+            This is a demonstration tool. After you continue, your budget draft is saved in this app's local profile on this device so you can resume it later. There is no account, cloud sync, or application database.
             <br/><br/>
-            Even though this tool does not store or transfer data, it is (like I said) a testing site and you should not use it with real client/matter information.
+            The baseline's optional AI actions send selected anonymized budget details to Anthropic and do not have a supported credential path. Do not use those actions; they are being removed by this overhaul.
             <br/><br/>
             <strong>Use anonymized/sample data only.</strong>
           </div>
@@ -1071,7 +1106,7 @@ function DisclaimerPage({ onAccept, onBack }) {
               style={{accentColor:ACCENT,marginTop:3,width:16,height:16,flexShrink:0}}
             />
             <span style={{fontSize:13,fontFamily:"sans-serif",color:TEXT,lineHeight:1.6}}>
-              I understand that this is a demonstration tool and I will only enter anonymized or sample data.
+              I understand that drafts are stored locally on this device, optional AI actions can transmit budget details, and I will only enter anonymized or sample data.
             </span>
           </label>
           <div style={{display:"flex",gap:12,alignItems:"center"}}>
@@ -1101,28 +1136,30 @@ function DisclaimerPage({ onAccept, onBack }) {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 
-// Load persisted session from localStorage (null if nothing saved)
-const loadSaved = () => {
-  try { return JSON.parse(localStorage.getItem("lb_session") || "null"); } catch { return null; }
-};
-
 const DEAL_VALUES = ["Not disclosed / TBD","Under $10M","$10M – $50M","$50M – $250M","$250M – $1B","$1B – $5B","Over $5B"];
 
-export default function App() {
-  const saved = useRef(loadSaved());
+const defaultTypeForMode = (mode) => mode === "corporate" ? "ma_strategic" : mode === "tax" ? "irs_audit" : "arbitration";
+const defaultMatterForMode = (mode) => ({ name: "", client: "", type: defaultTypeForMode(mode), duration: "", jurisdiction: "", description: "", dealValue: "" });
+const defaultCaveatsForMode = (mode) => mode === "corporate" ? [...CORP_CAVEATS] : mode === "tax" ? [...TAX_CAVEATS] : [...DEFAULT_CAVEATS];
 
-  const savedMode = saved.current?.mode || null;
-  const defaultType = savedMode === "corporate" ? "ma_strategic" : savedMode === "tax" ? "irs_audit" : "arbitration";
+export default function App() {
+  const initialDraftResult = useRef();
+  if (!initialDraftResult.current) {
+    initialDraftResult.current = readDraft(localStorage);
+  }
+  const initialDraft = initialDraftResult.current.draft;
+  const savedMode = initialDraft?.mode || null;
+  const defaultType = defaultTypeForMode(savedMode || "litigation");
 
   const [mode, setMode] = useState(null); // always start at landing page
   const [acknowledged, setAcknowledged] = useState(false);
   const [step, setStep] = useState(1);
-  const [matter, setMatter] = useState(saved.current?.matter || { name: "", client: "", type: defaultType, duration: "", jurisdiction: "", description: "", dealValue: "" });
-  const [phases, setPhases] = useState(saved.current?.phases || buildPhases(defaultType, savedMode || "litigation"));
-  const [timekeepers, setTimekeepers] = useState(saved.current?.timekeepers || []);
-  const [contingency, setContingency] = useState(saved.current?.contingency ?? 100000);
-  const [feeType, setFeeType] = useState(saved.current?.feeType || "hourly");
-  const [caveats, setCaveats] = useState(saved.current?.caveats || (savedMode === "corporate" ? [...CORP_CAVEATS] : savedMode === "tax" ? [...TAX_CAVEATS] : [...DEFAULT_CAVEATS]));
+  const [matter, setMatter] = useState(initialDraft?.matter || defaultMatterForMode(savedMode || "litigation"));
+  const [phases, setPhases] = useState(initialDraft?.phases || buildPhases(defaultType, savedMode || "litigation"));
+  const [timekeepers, setTimekeepers] = useState(initialDraft?.timekeepers || []);
+  const [contingency, setContingency] = useState(initialDraft?.contingency ?? 100000);
+  const [feeType, setFeeType] = useState(initialDraft?.feeType || "hourly");
+  const [caveats, setCaveats] = useState(initialDraft?.caveats || defaultCaveatsForMode(savedMode || "litigation"));
   const [outputVersion, setOutputVersion] = useState("client");
   const [aiLoading, setAiLoading] = useState({});
   const [caveatsLoading, setCaveatsLoading] = useState(false);
@@ -1132,17 +1169,25 @@ export default function App() {
   const [xlsxReady, setXlsxReady] = useState(false);
   const [newCaveat, setNewCaveat] = useState("");
   const [newTaskName, setNewTaskName] = useState({});
-  const [timelineMode, setTimelineMode] = useState(saved.current?.timelineMode || "auto");
-  const [phaseTimeline, setPhaseTimeline] = useState(saved.current?.phaseTimeline || {});
+  const [timelineMode, setTimelineMode] = useState(initialDraft?.timelineMode || "auto");
+  const [phaseTimeline, setPhaseTimeline] = useState(initialDraft?.phaseTimeline || {});
+  const [storedDraft, setStoredDraft] = useState(initialDraft);
+  const [draftStatus, setDraftStatus] = useState(initialDraftResult.current.status);
+  const [storageMessage, setStorageMessage] = useState("");
 
-  // Persist session to localStorage on every meaningful change
+  // Persist only an acknowledged, active draft. Landing navigation is transient.
   useEffect(() => {
-    try {
-      localStorage.setItem("lb_session", JSON.stringify({ mode, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline }));
-    } catch {
-      // Persistence is best-effort in the baseline implementation.
+    if (!mode || !acknowledged) return;
+    const result = writeDraft(localStorage, { mode, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline });
+    if (result.ok) {
+      const refreshed = readDraft(localStorage);
+      setStoredDraft(refreshed.draft);
+      setDraftStatus(refreshed.status);
+      setStorageMessage("");
+    } else {
+      setStorageMessage("This draft could not be saved on this device.");
     }
-  }, [mode, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline]);
+  }, [mode, acknowledged, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline]);
 
   useEffect(() => {
     const sc = document.createElement("script");
@@ -1151,21 +1196,66 @@ export default function App() {
     document.head.appendChild(sc);
   }, []);
 
-  // Reset everything when mode changes (but not on initial load from localStorage)
-  const prevMode = useRef(mode);
-  useEffect(() => {
-    if (prevMode.current !== mode && mode !== null) {
-      prevMode.current = mode;
-      const dt = mode === "corporate" ? "ma_strategic" : mode === "tax" ? "irs_audit" : "arbitration";
-      setMatter({ name: "", client: "", type: dt, duration: "", jurisdiction: "", description: "", dealValue: "" });
-      setPhases(buildPhases(dt, mode));
-      setTimekeepers([]);
-      setContingency(100000);
-      setFeeType("hourly");
-      setCaveats(mode === "corporate" ? [...CORP_CAVEATS] : mode === "tax" ? [...TAX_CAVEATS] : [...DEFAULT_CAVEATS]);
-      setStep(1);
+  const hydrateDraft = (draft) => {
+    setMatter(draft.matter);
+    setPhases(draft.phases);
+    setTimekeepers(draft.timekeepers);
+    setContingency(draft.contingency);
+    setFeeType(draft.feeType);
+    setCaveats(draft.caveats);
+    setTimelineMode(draft.timelineMode);
+    setPhaseTimeline(draft.phaseTimeline);
+    setMode(draft.mode);
+    setAcknowledged(false);
+    setStep(1);
+  };
+
+  const startNewDraft = (nextMode) => {
+    if (storedDraft && !window.confirm("Start a new budget and replace the saved draft on this device?")) return;
+    const cleared = clearDraft(localStorage);
+    if (!cleared.ok) {
+      setStorageMessage("The saved draft could not be cleared on this device.");
+      return;
     }
-  }, [mode]);
+    const nextMatter = defaultMatterForMode(nextMode);
+    setStoredDraft(null);
+    setDraftStatus("empty");
+    setStorageMessage("");
+    setMatter(nextMatter);
+    setPhases(buildPhases(nextMatter.type, nextMode));
+    setTimekeepers([]);
+    setContingency(100000);
+    setFeeType("hourly");
+    setCaveats(defaultCaveatsForMode(nextMode));
+    setTimelineMode("auto");
+    setPhaseTimeline({});
+    setMode(nextMode);
+    setAcknowledged(false);
+    setStep(1);
+  };
+
+  const resumeStoredDraft = () => {
+    const result = readDraft(localStorage);
+    setDraftStatus(result.status);
+    setStoredDraft(result.draft);
+    if (result.status === "ready") {
+      setStorageMessage("");
+      hydrateDraft(result.draft);
+    } else {
+      setStorageMessage("The saved draft could not be resumed. Start clean to recover.");
+    }
+  };
+
+  const clearStoredDraft = () => {
+    const result = clearDraft(localStorage);
+    if (!result.ok) {
+      setStorageMessage("The saved draft could not be cleared on this device.");
+      return;
+    }
+    setStoredDraft(null);
+    setDraftStatus("empty");
+    setStorageMessage("Saved draft cleared from this device.");
+  };
 
   // Rebuild phases only when matter.type changes AFTER initial load
   const prevMatterType = useRef(matter.type);
@@ -2496,7 +2586,16 @@ export default function App() {
 
   const stepComponents = [null, Step1, Step2, Step3, Step4, Step5, Step6];
 
-  if (!mode) return <LandingPage onSelect={setMode} />;
+  if (!mode) return (
+    <LandingPage
+      onSelect={startNewDraft}
+      onResume={resumeStoredDraft}
+      onClear={clearStoredDraft}
+      draft={storedDraft}
+      draftStatus={draftStatus}
+      storageMessage={storageMessage}
+    />
+  );
   if (!acknowledged) return <DisclaimerPage onAccept={()=>setAcknowledged(true)} onBack={()=>setMode(null)} />;
 
   return (
@@ -2531,6 +2630,12 @@ export default function App() {
           );
         })}
       </div>
+
+      {storageMessage && (
+        <div role="alert" style={{maxWidth:820,margin:"20px auto 0",padding:"12px 16px",background:"#fff7ed",border:"1px solid #d9a45f",borderRadius:4,fontSize:13,fontFamily:"sans-serif",color:"#6f3d0a"}}>
+          {storageMessage}
+        </div>
+      )}
 
       <div style={s.body}>
         {stepComponents[step] && stepComponents[step]()}
