@@ -992,7 +992,9 @@ const s = {
 function LandingCard({ title, sub, icon, onClick }) {
   const [hov, setHov] = useState(false);
   return (
-    <div
+    <button
+      type="button"
+      className="landing-card"
       onClick={onClick}
       onMouseEnter={()=>setHov(true)}
       onMouseLeave={()=>setHov(false)}
@@ -1001,12 +1003,14 @@ function LandingCard({ title, sub, icon, onClick }) {
         borderRadius: 6, padding: "44px 36px", cursor: "pointer", flex: "1 1 260px",
         boxShadow: hov ? "0 2px 16px rgba(46,95,163,0.13)" : "none",
         transition: "border-color 0.15s, box-shadow 0.15s",
+        textAlign: "left",
+        font: "inherit",
       }}
     >
       <div style={{fontSize:38,marginBottom:18,lineHeight:1}}>{icon}</div>
       <div style={{fontSize:16,fontFamily:"sans-serif",fontWeight:700,color:N,marginBottom:10,letterSpacing:"0.02em"}}>{title}</div>
       <div style={{fontSize:13,fontFamily:"sans-serif",color:MUTED,lineHeight:1.65}}>{sub}</div>
-    </div>
+    </button>
   );
 }
 
@@ -1016,7 +1020,7 @@ function LandingPage({ onSelect, onResume, onClear, draft, draftStatus, storageM
   const savedAt = draft?.savedAt ? new Date(draft.savedAt).toLocaleString() : "Recently";
 
   return (
-    <div style={{fontFamily:"Georgia,'Times New Roman',serif",minHeight:"100vh",background:"linear-gradient(-45deg,#1a2a4a,#0d3d52,#1e3348,#0a4a5c,#2d3d52)",backgroundSize:"400% 400%",animation:"gradientShift 16s ease infinite"}}>
+    <div className="landing-page" style={{fontFamily:"Georgia,'Times New Roman',serif",minHeight:"100vh",background:"linear-gradient(-45deg,#1a2a4a,#0d3d52,#1e3348,#0a4a5c,#2d3d52)",backgroundSize:"400% 400%",animation:"gradientShift 16s ease infinite"}}>
       <style>{`
         @keyframes gradientShift {
           0%   { background-position: 0% 50%; }
@@ -1028,7 +1032,7 @@ function LandingPage({ onSelect, onResume, onClear, draft, draftStatus, storageM
         <div style={{color:"#fff",fontSize:15,fontWeight:400,letterSpacing:"0.08em",textTransform:"uppercase",fontFamily:"sans-serif"}}>Legal Budget Builder</div>
         <div style={{color:"rgba(255,255,255,0.5)",fontSize:12,fontFamily:"sans-serif",marginTop:3}}>Professional fee estimation tool</div>
       </div>
-      <div style={{maxWidth:940,margin:"0 auto",padding:"72px 24px"}}>
+      <main className="landing-main" style={{maxWidth:940,margin:"0 auto",padding:"72px 24px"}}>
         <div style={{textAlign:"center",marginBottom:52}}>
           <div style={{fontSize:26,fontWeight:400,color:"#fff",marginBottom:12,letterSpacing:"0.01em"}}>Select a budgeting track</div>
           <div style={{fontSize:14,fontFamily:"sans-serif",color:"rgba(255,255,255,0.6)"}}>Choose the type of engagement to begin building your fee estimate.</div>
@@ -1084,7 +1088,7 @@ function LandingPage({ onSelect, onResume, onClear, draft, draftStatus, storageM
             onClick={()=>onSelect("tax")}
           />
         </div>
-      </div>
+      </main>
     </div>
   );
 }
@@ -2426,8 +2430,8 @@ export default function App() {
   if (!acknowledged) return <DisclaimerPage onAccept={()=>setAcknowledged(true)} onBack={()=>setMode(null)} />;
 
   return (
-    <div style={s.wrap}>
-      <div style={s.header}>
+    <div className="app-shell" style={s.wrap}>
+      <header className="app-header" style={s.header}>
         <div>
           <div style={s.headerTitle}>
             {mode === "corporate" ? "Corporate Budget Builder" : mode === "tax" ? "Tax Budget Builder" : "Litigation Budget Builder"}
@@ -2445,18 +2449,18 @@ export default function App() {
             ← Change type
           </button>
         </div>
-      </div>
+      </header>
 
-      <div style={s.steps}>
+      <nav className="app-steps" style={s.steps} aria-label="Budget steps">
         {STEPS.map((label,i) => {
           const n = i+1;
           return (
-            <div key={n} style={s.stepItem(step===n, step>n)} onClick={()=>setStep(n)}>
+            <button type="button" key={n} style={s.stepItem(step===n, step>n)} onClick={()=>setStep(n)} aria-current={step===n?"step":undefined}>
               {n}. {label}
-            </div>
+            </button>
           );
         })}
-      </div>
+      </nav>
 
       {storageMessage && (
         <div role="alert" style={{maxWidth:820,margin:"20px auto 0",padding:"12px 16px",background:"#fff7ed",border:"1px solid #d9a45f",borderRadius:4,fontSize:13,fontFamily:"sans-serif",color:"#6f3d0a"}}>
@@ -2464,11 +2468,11 @@ export default function App() {
         </div>
       )}
 
-      <div style={s.body}>
+      <main className="app-body" style={s.body}>
         {stepComponents[step] && stepComponents[step]()}
-      </div>
+      </main>
 
-      <div style={s.nav}>
+      <footer className="app-nav" style={s.nav}>
         <button style={s.btn(false)} onClick={()=>setStep(st=>Math.max(1,st-1))} disabled={step===1}>
           ← Back
         </button>
@@ -2479,7 +2483,7 @@ export default function App() {
           ? <button style={s.btn(true)} onClick={()=>setStep(st=>Math.min(STEPS.length,st+1))}>Next →</button>
           : <div style={{width:80}}></div>
         }
-      </div>
+      </footer>
     </div>
   );
 }
