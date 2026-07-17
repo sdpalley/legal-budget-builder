@@ -34,7 +34,7 @@ describe("phase catalog helpers", () => {
   it("parses common duration formats and uses a stable fallback", () => {
     expect(parseDurationMonths("18-24 months")).toBe(21);
     expect(parseDurationMonths("2 years")).toBe(24);
-    expect(parseDurationMonths("1–2 years")).toBe(24);
+    expect(parseDurationMonths("1–2 years")).toBe(18);
     expect(parseDurationMonths("not decided")).toBe(12);
     expect(parseDurationMonths("")).toBe(12);
   });

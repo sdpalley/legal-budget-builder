@@ -5,6 +5,12 @@ import {
   readDraft,
   writeDraft,
 } from "./domain/draftStorage.js";
+import {
+  buildMonthlyProjection,
+  calculateBudgetTotals,
+  calculatePhaseCost,
+  calculateTaskCost,
+} from "./domain/budget.js";
 
 // ── Phase Library ─────────────────────────────────────────────────────────────
 
@@ -913,7 +919,8 @@ export function parseDurationMonths(str) {
   const single = s.match(/(\d+)\s*month/);
   if (single) return parseInt(single[1]);
   const years = s.match(/(\d+)\s*[-–]\s*(\d+)\s*year/);
-  if (years) return Math.round((parseInt(years[1]) + parseInt(years[2])) / 2) * 12;
+  if (years)
+    return Math.round(((parseInt(years[1]) + parseInt(years[2])) / 2) * 12);
   const year = s.match(/(\d+)\s*year/);
   if (year) return parseInt(year[1]) * 12;
   return 12;
@@ -1279,30 +1286,8 @@ export default function App() {
 
   // ── Cost calculations ────────────────────────────────────────────────────
 
-  const taskCost = (t) => {
-    if (t.tkBreakdown && t.tkBreakdown.length > 0) {
-      let low = 0, high = 0;
-      t.tkBreakdown.forEach(b => {
-        const tk = timekeepers.find(x => x.id === b.tkId);
-        if (tk && tk.rate) {
-          low  += (Number(b.hoursLow)  || 0) * Number(tk.rate);
-          high += (Number(b.hoursHigh) || 0) * Number(tk.rate);
-        }
-      });
-      return { low, high };
-    }
-    return { low: Number(t.low) || 0, high: Number(t.high) || 0 };
-  };
-
-  const totals = () => {
-    let low = 0, high = 0;
-    phases.forEach(p => {
-      if (p.selected) p.tasks.forEach(t => {
-        if (t.selected) { const c = taskCost(t); low += c.low; high += c.high; }
-      });
-    });
-    return { low: low + (Number(contingency) || 0), high: high + (Number(contingency) || 0) };
-  };
+  const taskCost = (task) => calculateTaskCost(task, timekeepers);
+  const totals = () => calculateBudgetTotals(phases, timekeepers, contingency);
 
   // ── Timekeeper mutations ──────────────────────────────────────────────────
 
@@ -2225,8 +2210,8 @@ export default function App() {
           </div>
           <div style={{fontSize:12,fontFamily:"sans-serif",color:MUTED,marginBottom:16}}>
             {timelineMode==="auto"
-              ? "Phases distributed across the matter duration weighted by budget. Switch to Manual to set exact timing."
-              : "Set the start month and duration for each phase. Phases can overlap."}
+              ? "Phases are distributed across the matter duration by budget weight. Contingency is spread evenly across the projection."
+              : "Set the start month and duration for each phase. Phases can overlap, and the projection extends to include all configured work."}
           </div>
 
           {(() => {
@@ -2234,42 +2219,16 @@ export default function App() {
             const activePhs = phases.filter(p => p.selected);
 
             const phaseTotal = (p) => {
-              const tasks = p.tasks.filter(t => t.selected);
-              const low  = tasks.reduce((s, t) => s + taskCost(t).low,  0);
-              const high = tasks.reduce((s, t) => s + taskCost(t).high, 0);
+              const { low, high } = calculatePhaseCost(p, timekeepers);
               return { low, high, mid: (low + high) / 2 };
             };
-
-            // Build timeline
-            let timeline = {};
-            if (timelineMode === "auto") {
-              const totMid = activePhs.reduce((s,p) => s + phaseTotal(p).mid, 0);
-              let cursor = 1;
-              activePhs.forEach(p => {
-                const weight = totMid > 0 ? phaseTotal(p).mid / totMid : 1/activePhs.length;
-                const months = Math.max(1, Math.round(weight * totalMonths));
-                timeline[p.id] = { start: cursor, months };
-                cursor += months;
-              });
-            } else {
-              activePhs.forEach(p => {
-                timeline[p.id] = phaseTimeline[p.id] || { start: 1, months: Math.max(1, Math.floor(totalMonths / activePhs.length)) };
-              });
-            }
-
-            // Monthly totals
-            const monthlyData = Array.from({length: totalMonths}, (_, i) => {
-              const month = i + 1;
-              let low = 0, high = 0;
-              activePhs.forEach(p => {
-                const t = timeline[p.id] || { start: 1, months: 1 };
-                if (month >= t.start && month < t.start + t.months) {
-                  const pt = phaseTotal(p);
-                  low += pt.low / t.months;
-                  high += pt.high / t.months;
-                }
-              });
-              return { month, low: Math.round(low), high: Math.round(high) };
+            const { timeline, monthlyData, projectionMonths } = buildMonthlyProjection({
+              phases,
+              timekeepers,
+              contingency,
+              totalMonths,
+              timelineMode,
+              phaseTimeline,
             });
 
             const maxHigh = Math.max(...monthlyData.map(m => m.high), 1);
@@ -2329,7 +2288,7 @@ export default function App() {
 
                 {/* Bar chart */}
                 <div style={{overflowX:"auto"}}>
-                  <div style={{display:"flex", alignItems:"flex-end", gap:3, height:140, minWidth: totalMonths * 28, paddingBottom:0}}>
+                  <div style={{display:"flex", alignItems:"flex-end", gap:3, height:140, minWidth: projectionMonths * 28, paddingBottom:0}}>
                     {monthlyData.map(({month, low, high}, i) => {
                       const color = monthPhase[i] !== null ? PHASE_COLORS[monthPhase[i] % PHASE_COLORS.length] : "#ccc";
                       const highPct = maxHigh > 0 ? (high / maxHigh) * 100 : 0;
