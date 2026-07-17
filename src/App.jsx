@@ -891,7 +891,7 @@ const uid = () => Math.random().toString(36).slice(2,8);
 const fmt = n => n ? "$" + Number(n).toLocaleString() : "—";
 const fmtHrs = n => n ? `${n}h` : "—";
 
-const buildPhases = (type, m = "litigation") => {
+export const buildPhases = (type, m = "litigation") => {
   const lib = m === "corporate" ? CORP_LIBRARY : m === "tax" ? TAX_LIBRARY : LIBRARY;
   return (lib[type] || []).map(p => ({
     ...p, selected: true,
@@ -899,7 +899,7 @@ const buildPhases = (type, m = "litigation") => {
   }));
 };
 
-function parseDurationMonths(str) {
+export function parseDurationMonths(str) {
   if (!str) return 12;
   const s = str.toLowerCase();
   const range = s.match(/(\d+)\s*[-–]\s*(\d+)\s*month/);
