@@ -70,17 +70,25 @@ const toOptionalNumber = (value) => {
 
 const normalizeBreakdown = (value) => {
   if (value === null || value === undefined) return null;
-  if (!Array.isArray(value)) return null;
+  if (!Array.isArray(value)) return false;
 
-  return value.filter(isRecord).map((entry) => ({
-    tkId: toString(entry.tkId),
-    hoursLow: toOptionalNumber(entry.hoursLow),
-    hoursHigh: toOptionalNumber(entry.hoursHigh),
-  }));
+  const entries = value.map((entry) =>
+    isRecord(entry)
+      ? {
+          tkId: toString(entry.tkId),
+          hoursLow: toOptionalNumber(entry.hoursLow),
+          hoursHigh: toOptionalNumber(entry.hoursHigh),
+        }
+      : null,
+  );
+  return entries.some((entry) => entry === null) ? false : entries;
 };
 
 const normalizeTask = (task) => {
   if (!isRecord(task)) return null;
+
+  const tkBreakdown = normalizeBreakdown(task.tkBreakdown);
+  if (tkBreakdown === false) return null;
 
   return {
     id: toString(task.id),
@@ -89,7 +97,7 @@ const normalizeTask = (task) => {
     selected: toBoolean(task.selected, true),
     low: toOptionalNumber(task.low),
     high: toOptionalNumber(task.high),
-    tkBreakdown: normalizeBreakdown(task.tkBreakdown),
+    tkBreakdown,
   };
 };
 
@@ -186,6 +194,22 @@ export function normalizeDraft(raw) {
     ) {
       return null;
     }
+    const timekeeperIds = new Set(
+      timekeepers.map((timekeeper) => timekeeper.id),
+    );
+    if (
+      timekeeperIds.has("") ||
+      timekeeperIds.size !== timekeepers.length ||
+      phases.some((phase) =>
+        phase.tasks.some((task) =>
+          task.tkBreakdown?.some(
+            (entry) => !entry.tkId || !timekeeperIds.has(entry.tkId),
+          ),
+        ),
+      )
+    ) {
+      return null;
+    }
 
     return {
       version: DRAFT_VERSION,
@@ -206,12 +230,22 @@ export function normalizeDraft(raw) {
 }
 
 export function readDraft(storage) {
+  let serialized;
   try {
-    const serialized = storage.getItem(DRAFT_STORAGE_KEY);
-    if (serialized === null || serialized === "") {
-      return { status: "empty", draft: null };
-    }
+    serialized = storage.getItem(DRAFT_STORAGE_KEY);
+  } catch (error) {
+    return {
+      status: "unavailable",
+      draft: null,
+      error: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
 
+  if (serialized === null || serialized === "") {
+    return { status: "empty", draft: null };
+  }
+
+  try {
     const draft = normalizeDraft(JSON.parse(serialized));
     if (!draft) {
       return {

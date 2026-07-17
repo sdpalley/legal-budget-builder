@@ -1046,6 +1046,11 @@ function LandingPage({ onSelect, onResume, onClear, draft, draftStatus, storageM
             <button onClick={onClear} style={s.btn(false)}>Start clean</button>
           </div>
         )}
+        {draftStatus === "unavailable" && (
+          <div role="alert" style={{background:"#fff7ed",border:"1px solid #d9a45f",borderRadius:6,padding:"18px 22px",marginBottom:24,fontSize:13,fontFamily:"sans-serif",color:"#6f3d0a",lineHeight:1.5}}>
+            Local draft storage is unavailable. You can continue, but this session will not be saved.
+          </div>
+        )}
         {storageMessage && (
           <div role="status" style={{fontSize:12,fontFamily:"sans-serif",color:"#fff",background:"rgba(0,0,0,0.22)",borderRadius:4,padding:"10px 14px",marginBottom:20}}>
             {storageMessage}
@@ -1169,10 +1174,11 @@ export default function App() {
   const [storedDraft, setStoredDraft] = useState(initialDraft);
   const [draftStatus, setDraftStatus] = useState(initialDraftResult.current.status);
   const [storageMessage, setStorageMessage] = useState("");
+  const [persistenceEnabled, setPersistenceEnabled] = useState(initialDraftResult.current.status !== "unavailable");
 
   // Persist only an acknowledged, active draft. Landing navigation is transient.
   useEffect(() => {
-    if (!mode || !acknowledged) return;
+    if (!mode || !acknowledged || !persistenceEnabled) return;
     const result = writeDraft(localStorage, { mode, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline });
     if (result.ok) {
       const refreshed = readDraft(localStorage);
@@ -1180,11 +1186,14 @@ export default function App() {
       setDraftStatus(refreshed.status);
       setStorageMessage("");
     } else {
-      setStorageMessage("This draft could not be saved on this device.");
+      setPersistenceEnabled(false);
+      setDraftStatus("unavailable");
+      setStorageMessage("Local draft storage is unavailable. This session will not be saved.");
     }
-  }, [mode, acknowledged, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline]);
+  }, [mode, acknowledged, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline, persistenceEnabled]);
 
   const hydrateDraft = (draft) => {
+    setPersistenceEnabled(true);
     setMatter(draft.matter);
     setPhases(draft.phases);
     setTimekeepers(draft.timekeepers);
@@ -1200,15 +1209,21 @@ export default function App() {
 
   const startNewDraft = (nextMode) => {
     if (storedDraft && !window.confirm("Start a new budget and replace the saved draft on this device?")) return;
-    const cleared = clearDraft(localStorage);
-    if (!cleared.ok) {
-      setStorageMessage("The saved draft could not be cleared on this device.");
-      return;
+    if (persistenceEnabled) {
+      const cleared = clearDraft(localStorage);
+      if (!cleared.ok) {
+        setPersistenceEnabled(false);
+        setDraftStatus("unavailable");
+        setStorageMessage("Local draft storage is unavailable. This session will not be saved.");
+      } else {
+        setStoredDraft(null);
+        setDraftStatus("empty");
+        setStorageMessage("");
+      }
+    } else {
+      setStorageMessage("Local draft storage is unavailable. This session will not be saved.");
     }
     const nextMatter = defaultMatterForMode(nextMode);
-    setStoredDraft(null);
-    setDraftStatus("empty");
-    setStorageMessage("");
     setMatter(nextMatter);
     setPhases(buildPhases(nextMatter.type, nextMode));
     setTimekeepers([]);
@@ -1227,19 +1242,27 @@ export default function App() {
     setDraftStatus(result.status);
     setStoredDraft(result.draft);
     if (result.status === "ready") {
+      setPersistenceEnabled(true);
       setStorageMessage("");
       hydrateDraft(result.draft);
+    } else if (result.status === "unavailable") {
+      setPersistenceEnabled(false);
+      setStorageMessage("Local draft storage is unavailable. This session will not be saved.");
     } else {
       setStorageMessage("The saved draft could not be resumed. Start clean to recover.");
     }
   };
 
   const clearStoredDraft = () => {
+    if (storedDraft && !window.confirm("Clear the saved draft from this device? This cannot be undone.")) return;
     const result = clearDraft(localStorage);
     if (!result.ok) {
-      setStorageMessage("The saved draft could not be cleared on this device.");
+      setPersistenceEnabled(false);
+      setDraftStatus("unavailable");
+      setStorageMessage("Local draft storage is unavailable. This session will not be saved.");
       return;
     }
+    setPersistenceEnabled(true);
     setStoredDraft(null);
     setDraftStatus("empty");
     setStorageMessage("Saved draft cleared from this device.");

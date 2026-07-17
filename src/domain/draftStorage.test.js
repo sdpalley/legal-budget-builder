@@ -115,6 +115,15 @@ describe("normalizeDraft", () => {
     makeDraft({ caveats: "invalid" }),
     makeDraft({ phaseTimeline: [] }),
     makeDraft({ mode: "tax" }),
+    makeDraft({ phases: [{ id: "p1", tasks: [{ tkBreakdown: {} }] }] }),
+    makeDraft({
+      phases: [
+        {
+          id: "p1",
+          tasks: [{ tkBreakdown: [{ tkId: "missing" }] }],
+        },
+      ],
+    }),
   ])("rejects malformed or inconsistent input %#", (raw) => {
     expect(normalizeDraft(raw)).toBeNull();
   });
@@ -212,7 +221,7 @@ describe("draft persistence", () => {
     };
 
     expect(readDraft(getFailure)).toMatchObject({
-      status: "corrupt",
+      status: "unavailable",
       draft: null,
       error: expect.any(Error),
     });

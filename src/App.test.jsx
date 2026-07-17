@@ -124,6 +124,7 @@ describe("primary wizard workflow", () => {
 
   it("clears a saved draft from the landing page", async () => {
     const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     localStorage.setItem(
       "lb_session",
       JSON.stringify({
@@ -138,6 +139,13 @@ describe("primary wizard workflow", () => {
     );
 
     render(<App />);
+    await user.click(screen.getByRole("button", { name: "Clear saved draft" }));
+    expect(localStorage.getItem("lb_session")).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Resume draft" }),
+    ).toBeInTheDocument();
+
+    confirm.mockReturnValue(true);
     await user.click(screen.getByRole("button", { name: "Clear saved draft" }));
 
     expect(localStorage.getItem("lb_session")).toBeNull();
@@ -193,6 +201,21 @@ describe("primary wizard workflow", () => {
     await user.click(screen.getByRole("button", { name: "Start clean" }));
     expect(localStorage.getItem("lb_session")).toBeNull();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("continues without persistence when local storage is unavailable", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(localStorage, "getItem").mockImplementation(() => {
+      throw new Error("storage denied");
+    });
+
+    render(<App />);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Local draft storage is unavailable.",
+    );
+
+    await user.click(screen.getByText("Litigation & Dispute Resolution"));
+    expect(screen.getByText("Before You Continue")).toBeInTheDocument();
   });
 
   it("persists matter edits locally and navigates all six steps", async () => {
