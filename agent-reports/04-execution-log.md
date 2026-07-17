@@ -100,6 +100,18 @@ Baseline tag: `agent-baseline`
 - Adapted initial draft initialization and persistence failure handling to the stricter React hooks rules without changing behavior.
 - Verification after `npm audit fix`: full and production-only audits report zero vulnerabilities; format, lint, tests, build, and package checks pass.
 
+## Fresh-eyes remediation
+
+The first Phase 5 independent review returned NO-GO with two P1, two P2, and one P3 finding. All were remediated before final acceptance:
+
+- `18565f3` removes deleted timekeepers from task breakdowns before persistence, caps all projections at 120 months, adds regression tests, associates visible labels with controls, and names destructive icon buttons.
+- `e569ec2` pins every third-party GitHub Action to a verified commit SHA and publishes per-platform SHA-256 checksum files with release artifacts.
+- `8355166` removes the formatter exclusions and deletes the unused legacy `src/App.css`.
+- `e3827df` removes report-only trailing whitespace so `git diff --check agent-baseline..HEAD` is clean.
+- A second review verified the original data, timeline, release, and formatting findings but found coverage-mode timeouts, remaining unnamed dense-form controls, and the missing Node declaration. `73d644d` adds a 15-second instrumentation-aware test timeout, labels staffing/cost/hour/contingency/caveat controls, and declares Node 22+ in the manifest and README.
+- The third independent pass returned **GO** with no remaining P0–P2 findings after rerunning coverage, accessibility inspection, format, lint, build, and production audit.
+- Focused and full verification after remediation: 59 tests pass, format/lint/build pass, both audits report zero vulnerabilities, workflow YAML parses, and arm64 Electron packaging succeeds.
+
 ## Phase 4 result
 
 - Approved implementation order was preserved.
