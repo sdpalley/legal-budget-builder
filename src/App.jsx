@@ -1158,11 +1158,8 @@ const defaultMatterForMode = (mode) => ({ name: "", client: "", type: defaultTyp
 const defaultCaveatsForMode = (mode) => mode === "corporate" ? [...CORP_CAVEATS] : mode === "tax" ? [...TAX_CAVEATS] : [...DEFAULT_CAVEATS];
 
 export default function App() {
-  const initialDraftResult = useRef();
-  if (!initialDraftResult.current) {
-    initialDraftResult.current = readDraft(localStorage);
-  }
-  const initialDraft = initialDraftResult.current.draft;
+  const [initialDraftResult] = useState(() => readDraft(localStorage));
+  const initialDraft = initialDraftResult.draft;
   const savedMode = initialDraft?.mode || null;
   const defaultType = defaultTypeForMode(savedMode || "litigation");
 
@@ -1184,23 +1181,20 @@ export default function App() {
   const [timelineMode, setTimelineMode] = useState(initialDraft?.timelineMode || "auto");
   const [phaseTimeline, setPhaseTimeline] = useState(initialDraft?.phaseTimeline || {});
   const [storedDraft, setStoredDraft] = useState(initialDraft);
-  const [draftStatus, setDraftStatus] = useState(initialDraftResult.current.status);
+  const [draftStatus, setDraftStatus] = useState(initialDraftResult.status);
   const [storageMessage, setStorageMessage] = useState("");
-  const [persistenceEnabled, setPersistenceEnabled] = useState(initialDraftResult.current.status !== "unavailable");
+  const [persistenceEnabled, setPersistenceEnabled] = useState(initialDraftResult.status !== "unavailable");
 
   // Persist only an acknowledged, active draft. Landing navigation is transient.
   useEffect(() => {
     if (!mode || !acknowledged || !persistenceEnabled) return;
     const result = writeDraft(localStorage, { mode, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline });
-    if (result.ok) {
-      const refreshed = readDraft(localStorage);
-      setStoredDraft(refreshed.draft);
-      setDraftStatus(refreshed.status);
-      setStorageMessage("");
-    } else {
-      setPersistenceEnabled(false);
-      setDraftStatus("unavailable");
-      setStorageMessage("Local draft storage is unavailable. This session will not be saved.");
+    if (!result.ok) {
+      queueMicrotask(() => {
+        setPersistenceEnabled(false);
+        setDraftStatus("unavailable");
+        setStorageMessage("Local draft storage is unavailable. This session will not be saved.");
+      });
     }
   }, [mode, acknowledged, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline, persistenceEnabled]);
 
@@ -1278,6 +1272,18 @@ export default function App() {
     setStoredDraft(null);
     setDraftStatus("empty");
     setStorageMessage("Saved draft cleared from this device.");
+  };
+
+  const returnToLanding = () => {
+    const result = readDraft(localStorage);
+    setStoredDraft(result.draft);
+    setDraftStatus(result.status);
+    if (result.status === "unavailable") {
+      setPersistenceEnabled(false);
+      setStorageMessage("Local draft storage is unavailable. This session will not be saved.");
+    }
+    setMode(null);
+    setAcknowledged(false);
   };
 
   // Rebuild phases only when matter.type changes AFTER initial load
@@ -2443,7 +2449,7 @@ export default function App() {
             {matter.type ? modeLabels[matter.type] : ""}
           </div>
           <button
-            onClick={()=>{ setMode(null); setAcknowledged(false); }}
+            onClick={returnToLanding}
             style={{fontSize:11,fontFamily:"sans-serif",color:"#fff",background:ACCENT,border:"none",borderRadius:3,padding:"6px 14px",cursor:"pointer",letterSpacing:"0.05em",fontWeight:600}}
           >
             ← Change type
