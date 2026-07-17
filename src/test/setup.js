@@ -21,12 +21,10 @@ Object.defineProperty(globalThis, "localStorage", {
 
 beforeEach(() => {
   localStorage.clear();
+  vi.clearAllMocks();
   vi.restoreAllMocks();
 });
 
 afterEach(() => {
   cleanup();
-  document.head
-    .querySelectorAll('script[src*="xlsx-js-style"]')
-    .forEach((script) => script.remove());
 });

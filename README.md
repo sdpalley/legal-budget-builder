@@ -10,7 +10,7 @@ The application is a local single-user budgeting aid, not legal advice, billing 
 - There is no application server, account system, cloud sync, or remote database.
 - The budgeting workflow does not transmit matter data to an AI or application service.
 - Treat the app as a demonstration tool and use anonymized/sample data unless your organization has reviewed the local-device storage model.
-- Excel export currently loads its workbook library from jsDelivr and is scheduled to become a bundled, offline dependency on the overhaul branch.
+- Excel export uses a pinned, locally bundled workbook library loaded on demand. Export does not require network access.
 
 The statements above describe the current branch state and are deliberately explicit while the privacy/export hardening commits are in progress.
 
@@ -101,7 +101,7 @@ The approved overhaul extracts only proven boundaries—domain/calculation code,
 ## Troubleshooting
 
 - **A saved draft prevents launch:** clear site data/local storage for the app profile. The overhaul adds an in-app recovery control.
-- **Excel stays on “Loading…”:** the baseline depends on jsDelivr; check connectivity. The overhaul replaces this dependency with a local bundle.
+- **Excel export fails:** the draft remains saved locally. Retry from Output; if it still fails, restart the app and attach only redacted diagnostic details to a private report.
 - **Electron opens a stale UI:** stop Electron, run `npm run build`, and relaunch.
 
 ## Security

@@ -4,6 +4,22 @@ import { describe, expect, it, vi } from "vitest";
 
 import App, { buildPhases, parseDurationMonths } from "./App.jsx";
 
+const workbookMocks = vi.hoisted(() => ({
+  bookAppendSheet: vi.fn(),
+  bookNew: vi.fn(() => ({})),
+  writeFile: vi.fn(),
+}));
+
+vi.mock("xlsx-js-style", () => ({
+  default: {
+    utils: {
+      book_append_sheet: workbookMocks.bookAppendSheet,
+      book_new: workbookMocks.bookNew,
+    },
+    writeFile: workbookMocks.writeFile,
+  },
+}));
+
 const ACKNOWLEDGEMENT =
   "I understand that drafts are stored locally on this device and I will only enter anonymized or sample data.";
 
@@ -222,5 +238,53 @@ describe("primary wizard workflow", () => {
     expect(screen.getByText("Total Estimate").parentElement).toHaveTextContent(
       "$101,000 — $102,000",
     );
+  });
+
+  it("creates the Excel workbook on demand from the output step", async () => {
+    const user = userEvent.setup();
+    await enterLitigationWizard(user);
+    await user.type(
+      screen.getByPlaceholderText("e.g. Smith v. Jones"),
+      "Export sample",
+    );
+
+    for (let step = 1; step < 6; step += 1) {
+      await user.click(screen.getByRole("button", { name: "Next →" }));
+    }
+    await user.click(screen.getByRole("button", { name: "↓ Download Excel" }));
+
+    await waitFor(() => {
+      expect(workbookMocks.writeFile).toHaveBeenCalledWith(
+        expect.any(Object),
+        "Export_sample_budget.xlsx",
+      );
+    });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Excel budget created successfully.",
+    );
+  });
+
+  it("shows a recoverable error when Excel writing fails", async () => {
+    const user = userEvent.setup();
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => {});
+    workbookMocks.writeFile.mockImplementationOnce(() => {
+      throw new Error("write denied");
+    });
+    await enterLitigationWizard(user);
+
+    for (let step = 1; step < 6; step += 1) {
+      await user.click(screen.getByRole("button", { name: "Next →" }));
+    }
+    await user.click(screen.getByRole("button", { name: "↓ Download Excel" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Excel export failed. Your draft is still saved; try again.",
+    );
+    expect(
+      screen.getByRole("button", { name: "Retry Excel Export" }),
+    ).toBeEnabled();
+    expect(consoleError).toHaveBeenCalled();
   });
 });

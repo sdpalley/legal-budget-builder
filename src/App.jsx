@@ -1160,7 +1160,8 @@ export default function App() {
   const [caveats, setCaveats] = useState(initialDraft?.caveats || defaultCaveatsForMode(savedMode || "litigation"));
   const [outputVersion, setOutputVersion] = useState("client");
   const modeLabels = mode === "corporate" ? CORP_MATTER_LABELS : mode === "tax" ? TAX_MATTER_LABELS : MATTER_LABELS;
-  const [xlsxReady, setXlsxReady] = useState(false);
+  const [exportStatus, setExportStatus] = useState("idle");
+  const [exportError, setExportError] = useState("");
   const [newCaveat, setNewCaveat] = useState("");
   const [newTaskName, setNewTaskName] = useState({});
   const [timelineMode, setTimelineMode] = useState(initialDraft?.timelineMode || "auto");
@@ -1182,13 +1183,6 @@ export default function App() {
       setStorageMessage("This draft could not be saved on this device.");
     }
   }, [mode, acknowledged, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline]);
-
-  useEffect(() => {
-    const sc = document.createElement("script");
-    sc.src = "https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js";
-    sc.onload = () => setXlsxReady(true);
-    document.head.appendChild(sc);
-  }, []);
 
   const hydrateDraft = (draft) => {
     setMatter(draft.matter);
@@ -1352,9 +1346,12 @@ export default function App() {
 
   // ── Excel Export ──────────────────────────────────────────────────────────
 
-  const exportExcel = () => {
-    if (!window.XLSX) return;
-    const XLSX = window.XLSX;
+  const exportExcel = async () => {
+    setExportStatus("loading");
+    setExportError("");
+    try {
+      const module = await import("xlsx-js-style");
+      const XLSX = module.default || module;
     const wb = XLSX.utils.book_new();
     const ws = {};
     const merges = [];
@@ -1595,7 +1592,13 @@ export default function App() {
 
     XLSX.utils.book_append_sheet(wb, ws, "Budget");
     const filename = `${(matter.name || "budget").replace(/\s+/g, "_")}_budget.xlsx`;
-    XLSX.writeFile(wb, filename);
+      XLSX.writeFile(wb, filename);
+      setExportStatus("success");
+    } catch (error) {
+      console.error("Excel export failed", error);
+      setExportError("Excel export failed. Your draft is still saved; try again.");
+      setExportStatus("error");
+    }
   };
 
   // ── Render Steps ──────────────────────────────────────────────────────────
@@ -2370,14 +2373,19 @@ export default function App() {
           })()}
         </div>
 
-        <div style={{display:"flex",gap:12}}>
-          <button style={{...s.btn(true),flex:1}} onClick={exportExcel} disabled={!xlsxReady}>
-            {xlsxReady ? "↓ Download Excel" : "Loading..."}
-          </button>
-          <button style={{...s.btn(false),flex:1,opacity:0.5,cursor:"not-allowed"}} disabled title="Coming in next version">
-            ↓ Download Word / PDF
-          </button>
-        </div>
+        {exportError && (
+          <div role="alert" style={{marginBottom:12,padding:"10px 12px",background:"#fff1f0",border:"1px solid #d9a09a",borderRadius:4,fontSize:12,fontFamily:"sans-serif",color:"#8a2f28"}}>
+            {exportError}
+          </div>
+        )}
+        {exportStatus === "success" && (
+          <div role="status" style={{marginBottom:12,fontSize:12,fontFamily:"sans-serif",color:"#356b4b"}}>
+            Excel budget created successfully.
+          </div>
+        )}
+        <button style={{...s.btn(true),width:"100%"}} onClick={exportExcel} disabled={exportStatus === "loading"}>
+          {exportStatus === "loading" ? "Preparing Excel…" : exportStatus === "error" ? "Retry Excel Export" : "↓ Download Excel"}
+        </button>
       </div>
     );
   };
