@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import App, { buildPhases, parseDurationMonths } from "./App.jsx";
 
 const ACKNOWLEDGEMENT =
-  "I understand that drafts are stored locally on this device, optional AI actions can transmit budget details, and I will only enter anonymized or sample data.";
+  "I understand that drafts are stored locally on this device and I will only enter anonymized or sample data.";
 
 async function enterLitigationWizard(user) {
   render(<App />);

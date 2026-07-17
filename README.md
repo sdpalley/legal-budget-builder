@@ -8,8 +8,8 @@ The application is a local single-user budgeting aid, not legal advice, billing 
 
 - Draft data is stored in the current browser/Electron profile under the local-storage key `lb_session`.
 - There is no application server, account system, cloud sync, or remote database.
+- The budgeting workflow does not transmit matter data to an AI or application service.
 - Treat the app as a demonstration tool and use anonymized/sample data unless your organization has reviewed the local-device storage model.
-- The baseline AI controls make unsupported direct renderer requests and are scheduled for removal on the overhaul branch. Do not use them with matter data.
 - Excel export currently loads its workbook library from jsDelivr and is scheduled to become a bundled, offline dependency on the overhaul branch.
 
 The statements above describe the current branch state and are deliberately explicit while the privacy/export hardening commits are in progress.
@@ -102,7 +102,6 @@ The approved overhaul extracts only proven boundaries—domain/calculation code,
 
 - **A saved draft prevents launch:** clear site data/local storage for the app profile. The overhaul adds an in-app recovery control.
 - **Excel stays on “Loading…”:** the baseline depends on jsDelivr; check connectivity. The overhaul replaces this dependency with a local bundle.
-- **AI actions fail silently:** they have no supported credential path in the baseline. Do not add API keys to renderer code; the approved plan removes these actions.
 - **Electron opens a stale UI:** stop Electron, run `npm run build`, and relaunch.
 
 ## Security

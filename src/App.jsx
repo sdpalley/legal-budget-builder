@@ -901,7 +901,7 @@ export const buildPhases = (type, m = "litigation") => {
   const lib = m === "corporate" ? CORP_LIBRARY : m === "tax" ? TAX_LIBRARY : LIBRARY;
   return (lib[type] || []).map(p => ({
     ...p, selected: true,
-    tasks: p.tasks.map(t => ({ ...t, selected: true, low: "", high: "", note: t.note, aiRationale: "", tkBreakdown: null }))
+    tasks: p.tasks.map(t => ({ ...t, selected: true, low: "", high: "", note: t.note, tkBreakdown: null }))
   }));
 };
 
@@ -962,7 +962,6 @@ const s = {
     border: `1px solid ${primary ? N : BORDER}`, transition: "opacity 0.15s",
   }),
   btnSmall: { padding: "5px 12px", fontSize: 11, fontFamily: "sans-serif", letterSpacing: "0.06em", textTransform: "uppercase", borderRadius: 3, cursor: "pointer", fontWeight: 600, background: "#fff", color: ACCENT, border: `1px solid ${ACCENT}` },
-  btnAI: { padding: "5px 12px", fontSize: 11, fontFamily: "sans-serif", letterSpacing: "0.06em", textTransform: "uppercase", borderRadius: 3, cursor: "pointer", fontWeight: 600, background: ACCENT, color: "#fff", border: `1px solid ${ACCENT}` },
   nav: { display: "flex", justifyContent: "space-between", alignItems: "center", maxWidth: 820, margin: "0 auto", padding: "24px 24px 0" },
   totalBar: { background: N, color: "#fff", borderRadius: 4, padding: "16px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, fontFamily: "sans-serif" },
   caveatRow: { display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 10 },
@@ -970,7 +969,6 @@ const s = {
   radioRow: { display: "flex", flexDirection: "column", gap: 10 },
   radioItem: (active) => ({ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", border: `1px solid ${active ? ACCENT : BORDER}`, borderRadius: 4, cursor: "pointer", background: active ? "#eef3fb" : "#fff" }),
   radioLabel: { fontSize: 13, fontFamily: "sans-serif", color: TEXT },
-  rationale: { fontSize: 11, fontFamily: "sans-serif", color: "#5a8a5a", fontStyle: "italic", marginTop: 2 },
   outputSection: { marginBottom: 20 },
   outputToggle: (active) => ({ padding: "10px 20px", fontSize: 12, fontFamily: "sans-serif", letterSpacing: "0.06em", textTransform: "uppercase", cursor: "pointer", fontWeight: active ? 700 : 400, background: active ? N : "#fff", color: active ? "#fff" : N, border: `1px solid ${N}`, borderRadius: active ? 3 : 3, flex: 1, transition: "all 0.15s" }),
   previewPhase: { marginBottom: 16 },
@@ -1094,7 +1092,7 @@ function DisclaimerPage({ onAccept, onBack }) {
           <div style={{fontSize:15,color:N,lineHeight:1.8,marginBottom:28}}>
             This is a demonstration tool. After you continue, your budget draft is saved in this app's local profile on this device so you can resume it later. There is no account, cloud sync, or application database.
             <br/><br/>
-            The baseline's optional AI actions send selected anonymized budget details to Anthropic and do not have a supported credential path. Do not use those actions; they are being removed by this overhaul.
+            The budgeting workflow does not transmit matter data to an application server or AI service. Excel export is generated from the draft in this app.
             <br/><br/>
             <strong>Use anonymized/sample data only.</strong>
           </div>
@@ -1106,7 +1104,7 @@ function DisclaimerPage({ onAccept, onBack }) {
               style={{accentColor:ACCENT,marginTop:3,width:16,height:16,flexShrink:0}}
             />
             <span style={{fontSize:13,fontFamily:"sans-serif",color:TEXT,lineHeight:1.6}}>
-              I understand that drafts are stored locally on this device, optional AI actions can transmit budget details, and I will only enter anonymized or sample data.
+              I understand that drafts are stored locally on this device and I will only enter anonymized or sample data.
             </span>
           </label>
           <div style={{display:"flex",gap:12,alignItems:"center"}}>
@@ -1161,10 +1159,6 @@ export default function App() {
   const [feeType, setFeeType] = useState(initialDraft?.feeType || "hourly");
   const [caveats, setCaveats] = useState(initialDraft?.caveats || defaultCaveatsForMode(savedMode || "litigation"));
   const [outputVersion, setOutputVersion] = useState("client");
-  const [aiLoading, setAiLoading] = useState({});
-  const [caveatsLoading, setCaveatsLoading] = useState(false);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [summary, setSummary] = useState("");
   const modeLabels = mode === "corporate" ? CORP_MATTER_LABELS : mode === "tax" ? TAX_MATTER_LABELS : MATTER_LABELS;
   const [xlsxReady, setXlsxReady] = useState(false);
   const [newCaveat, setNewCaveat] = useState("");
@@ -1308,7 +1302,7 @@ export default function App() {
   const addTask = (pid) => {
     const name = (newTaskName[pid]||"").trim();
     if (!name) return;
-    setPhases(prev => prev.map(p => p.id!==pid ? p : {...p, tasks: [...p.tasks, {id:uid(), name, note:"", selected:true, low:"", high:"", aiRationale:"", tkBreakdown:null}]}));
+    setPhases(prev => prev.map(p => p.id!==pid ? p : {...p, tasks: [...p.tasks, {id:uid(), name, note:"", selected:true, low:"", high:"", tkBreakdown:null}]}));
     setNewTaskName(prev => ({...prev, [pid]:""}));
   };
   const addPhase = () => {
@@ -1354,134 +1348,6 @@ export default function App() {
         return { ...t, tkBreakdown: t.tkBreakdown.filter(b => b.tkId!==tkId) };
       })
     }));
-  };
-
-  // ── AI ────────────────────────────────────────────────────────────────────
-
-  const suggestAll = async () => {
-    const allTasks = phases.flatMap(p => p.selected ? p.tasks.filter(t=>t.selected && !t.tkBreakdown).map(t=>({phaseId:p.id, taskId:t.id, phaseName:p.name, taskName:t.name})) : []);
-    if (!allTasks.length) return;
-    const loadMap = Object.fromEntries(allTasks.map(t=>[t.taskId,true]));
-    setAiLoading(loadMap);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          model:"claude-sonnet-4-20250514", max_tokens:1000,
-          messages:[{ role:"user", content:
-            mode === "corporate"
-              ? `You are an experienced transactional attorney. For a ${modeLabels[matter.type]} deal` +
-                `${matter.jurisdiction ? `, governed by ${matter.jurisdiction} law` : ""}` +
-                `${matter.dealValue ? `, deal value ${matter.dealValue}` : ""}` +
-                `${matter.duration ? `, expected timeline ${matter.duration}` : ""}, provide realistic US law firm attorney fee estimates.\n` +
-                `Return ONLY a JSON array, no other text or markdown. Each element: {"taskId":string,"low":number,"high":number,"rationale":string (max 12 words)}.\n\nTasks:\n` +
-                allTasks.map(t=>`{"taskId":"${t.taskId}","phase":"${t.phaseName}","task":"${t.taskName}"}`).join("\n")
-              : mode === "tax"
-              ? `You are an experienced tax attorney. For a ${modeLabels[matter.type]} matter` +
-                `${matter.jurisdiction ? ` (forum: ${matter.jurisdiction})` : ""}` +
-                `${matter.dealValue ? `, tax years: ${matter.dealValue}` : ""}` +
-                `${matter.duration ? `, estimated duration ${matter.duration}` : ""}, provide realistic US law firm attorney fee estimates.\n` +
-                `Return ONLY a JSON array, no other text or markdown. Each element: {"taskId":string,"low":number,"high":number,"rationale":string (max 12 words)}.\n\nTasks:\n` +
-                allTasks.map(t=>`{"taskId":"${t.taskId}","phase":"${t.phaseName}","task":"${t.taskName}"}`).join("\n")
-              : `You are an experienced litigation partner. For a ${modeLabels[matter.type]} matter` +
-                `${matter.jurisdiction ? ` in ${matter.jurisdiction}` : ""}` +
-                `, estimated duration ${matter.duration} months, provide realistic US law firm attorney fee estimates.\n` +
-                `Return ONLY a JSON array, no other text or markdown. Each element: {"taskId":string,"low":number,"high":number,"rationale":string (max 12 words)}.\n\nTasks:\n` +
-                allTasks.map(t=>`{"taskId":"${t.taskId}","phase":"${t.phaseName}","task":"${t.taskName}"}`).join("\n")
-          }]
-        })
-      });
-      const data = await res.json();
-      const raw = data.content?.[0]?.text || "[]";
-      const suggestions = JSON.parse(raw.replace(/```json|```/g,"").trim());
-      setPhases(prev => prev.map(p => ({...p, tasks: p.tasks.map(t => {
-        const sg = suggestions.find(sg=>sg.taskId===t.id);
-        return sg ? {...t, low:sg.low, high:sg.high, aiRationale:sg.rationale} : t;
-      })})));
-    } catch(e) { console.error(e); }
-    setAiLoading({});
-  };
-
-  const suggestOne = async (pid, tid) => {
-    setAiLoading(prev=>({...prev,[tid]:true}));
-    const phase = phases.find(p=>p.id===pid);
-    const task = phase?.tasks.find(t=>t.id===tid);
-    if (!task) return;
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          model:"claude-sonnet-4-20250514", max_tokens:200,
-          messages:[{ role:"user", content:
-            mode === "corporate"
-              ? `For a ${modeLabels[matter.type]} deal${matter.jurisdiction?`, governed by ${matter.jurisdiction} law`:""}${matter.dealValue?`, deal value ${matter.dealValue}`:""}, estimate US law firm attorney fees for: "${task.name}" (phase: ${phase.name}). Return ONLY JSON: {"low":number,"high":number,"rationale":string (max 12 words)}. No other text.`
-              : mode === "tax"
-              ? `For a ${modeLabels[matter.type]} matter${matter.jurisdiction?` (forum: ${matter.jurisdiction})`:""}${matter.dealValue?`, tax years: ${matter.dealValue}`:""}, estimate US law firm tax attorney fees for: "${task.name}" (phase: ${phase.name}). Return ONLY JSON: {"low":number,"high":number,"rationale":string (max 12 words)}. No other text.`
-              : `For a ${modeLabels[matter.type]} matter${matter.jurisdiction?` in ${matter.jurisdiction}`:""}, estimate US law firm attorney fees for: "${task.name}" (phase: ${phase.name}). Return ONLY JSON: {"low":number,"high":number,"rationale":string (max 12 words)}. No other text.`
-          }]
-        })
-      });
-      const data = await res.json();
-      const sg = JSON.parse((data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim());
-      setPhases(prev=>prev.map(p=>p.id!==pid?p:{...p, tasks:p.tasks.map(t=>t.id!==tid?t:{...t,low:sg.low,high:sg.high,aiRationale:sg.rationale})}));
-    } catch(e) { console.error(e); }
-    setAiLoading(prev=>({...prev,[tid]:false}));
-  };
-
-  const generateCaveats = async () => {
-    setCaveatsLoading(true);
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          model:"claude-sonnet-4-20250514", max_tokens:700,
-          messages:[{ role:"user", content:
-            `You are a legal billing expert. Generate 6 specific, accurate fee budget caveats for a ${modeLabels[matter.type]} matter` +
-            `${matter.jurisdiction ? ` (${matter.jurisdiction})` : ""}. ` +
-            `Fee arrangement: ${FEE_TYPES.find(f=>f.v===feeType)?.l || feeType}. ` +
-            `Return ONLY a JSON array of strings. No other text or markdown.`
-          }]
-        })
-      });
-      const data = await res.json();
-      const raw = data.content?.[0]?.text || "[]";
-      const generated = JSON.parse(raw.replace(/```json|```/g,"").trim());
-      if (Array.isArray(generated)) setCaveats(generated);
-    } catch(e) { console.error(e); }
-    setCaveatsLoading(false);
-  };
-
-  const generateSummary = async () => {
-    setSummaryLoading(true);
-    const T = totals();
-    const phaseBreakdown = phases
-      .filter(p=>p.selected)
-      .map(p => {
-        const tasks = p.tasks.filter(t=>t.selected);
-        const pc = tasks.reduce((a,t)=>{ const c=taskCost(t); return {low:a.low+c.low,high:a.high+c.high}; }, {low:0,high:0});
-        return pc.low||pc.high ? `${p.name}: ${fmt(pc.low)}–${fmt(pc.high)}` : null;
-      })
-      .filter(Boolean)
-      .join("; ");
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({
-          model:"claude-sonnet-4-20250514", max_tokens:300,
-          messages:[{ role:"user", content:
-            `Write a 2–3 sentence professional budget narrative for a ${modeLabels[matter.type]} matter. ` +
-            `Total fee estimate: ${fmt(T.low)} – ${fmt(T.high)}. ` +
-            (phaseBreakdown ? `Phase breakdown: ${phaseBreakdown}. ` : "") +
-            `Fee arrangement: ${FEE_TYPES.find(f=>f.v===feeType)?.l || feeType}. ` +
-            `Write from the law firm's perspective. Do not include any client name or matter name. ` +
-            `Return only the summary paragraph, no quotes or labels.`
-          }]
-        })
-      });
-      const data = await res.json();
-      setSummary(data.content?.[0]?.text?.trim() || "");
-    } catch(e) { console.error(e); }
-    setSummaryLoading(false);
   };
 
   // ── Excel Export ──────────────────────────────────────────────────────────
@@ -1620,7 +1486,7 @@ export default function App() {
 
       tasks.forEach(t => {
         const { low: lo, high: hi } = taskCost(t);
-        const note = [t.note, isInternal && t.aiRationale ? `AI: ${t.aiRationale}` : ""].filter(Boolean).join(" | ");
+        const note = t.note || "";
         const rowFill = fill(taskRowIdx % 2 === 0 ? WHITE : "FAFAF8");
         const taskStyle    = { font: font(false, 10), fill: rowFill, border: bdrAll() };
         const numStyle     = { font: font(false, 10), fill: rowFill, alignment: alignR, border: bdrAll() };
@@ -1942,24 +1808,6 @@ export default function App() {
         )}
       </div>
 
-      {/* AI Budget Assistant – Coming Soon */}
-      <div style={{...s.card, opacity:0.55, pointerEvents:"none", position:"relative", overflow:"hidden"}}>
-        <div style={{position:"absolute",top:10,right:12,background:"#e8edf5",color:MUTED,fontSize:10,fontFamily:"sans-serif",fontWeight:700,letterSpacing:"0.07em",textTransform:"uppercase",padding:"3px 9px",borderRadius:10}}>Coming Soon</div>
-        <div style={{...s.sectionTitle,marginBottom:4}}>✦ AI Budget Assistant</div>
-        <div style={{fontSize:12,fontFamily:"sans-serif",color:MUTED,marginBottom:14,lineHeight:1.6}}>
-          Describe the matter in plain language. The assistant will suggest phases, tasks, and fee ranges using matter type, jurisdiction, team roles and rates, and anonymized scope details — no client or identifying information required.
-        </div>
-        <div style={s.fieldWrap}>
-          <label style={s.label}>Describe the matter (scope, complexity, key issues — anonymized)</label>
-          <textarea
-            disabled
-            rows={4}
-            style={{...s.input, width:"100%", resize:"vertical", background:"#f4f6fa", color:MUTED, fontFamily:"sans-serif", fontSize:13, lineHeight:1.6}}
-            placeholder="e.g. Contract dispute, $4M in alleged damages, contested discovery expected, expert witnesses on both sides, likely summary judgment motions before trial. Mid-size team: partner, two associates, paralegal."
-          />
-        </div>
-        <button disabled style={{...s.btn, marginTop:4, background:"#b0b8c9", cursor:"not-allowed"}}>Generate Budget with AI</button>
-      </div>
     </div>
   );
 
@@ -2003,19 +1851,13 @@ export default function App() {
   );
 
   const Step3 = () => {
-    const anyLoading = Object.values(aiLoading).some(Boolean);
     const hasTks = timekeepers.length > 0;
     return (
       <div>
         <div style={s.card}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div style={s.sectionTitle}>Cost Ranges</div>
-            <button style={s.btnAI} onClick={suggestAll} disabled={anyLoading}>
-              {anyLoading ? "Suggesting..." : "✦ Suggest All Ranges"}
-            </button>
-          </div>
+          <div style={s.sectionTitle}>Cost Ranges</div>
           <div style={{fontSize:12,fontFamily:"sans-serif",color:MUTED,marginBottom:20}}>
-            Enter low / high dollar estimates per task, or use AI suggestions.
+            Enter low / high dollar estimates per task.
             {hasTks && <span style={{color:ACCENT}}> Click <strong>÷ hrs</strong> on any task to break down by timekeeper hours × rate.</span>}
             {!hasTks && <span> <button style={{background:"none",border:"none",padding:0,color:ACCENT,cursor:"pointer",fontFamily:"sans-serif",fontSize:12,textDecoration:"underline"}} onClick={()=>setStep(1)}>Add timekeepers in Step 1</button> to enable hour-based cost breakdown.</span>}
           </div>
@@ -2037,7 +1879,6 @@ export default function App() {
                         <div style={{fontSize:13,fontFamily:"sans-serif",color:TEXT}}>
                           {t.name} {t.note&&<span style={s.taskNote}>[{t.note}]</span>}
                         </div>
-                        {t.aiRationale && <div style={s.rationale}>✦ {t.aiRationale}</div>}
                       </div>
 
                       <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
@@ -2051,9 +1892,6 @@ export default function App() {
                           <>
                             <input style={s.moneyInput} placeholder="Low $" value={t.low} onChange={e=>updateTask(p.id,t.id,"low",e.target.value.replace(/[^0-9]/g,""))} />
                             <input style={s.moneyInput} placeholder="High $" value={t.high} onChange={e=>updateTask(p.id,t.id,"high",e.target.value.replace(/[^0-9]/g,""))} />
-                            <button style={{...s.btnSmall,padding:"5px 8px",fontSize:10,whiteSpace:"nowrap"}} onClick={()=>suggestOne(p.id,t.id)} disabled={!!aiLoading[t.id]} title="AI suggestion">
-                              {aiLoading[t.id]?"...":"✦"}
-                            </button>
                           </>
                         )}
 
@@ -2235,15 +2073,9 @@ export default function App() {
 
   const Step5 = () => (
     <div style={s.card}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={s.sectionTitle}>Caveats and Exclusions</div>
-        <button style={s.btnAI} onClick={generateCaveats} disabled={caveatsLoading}>
-          {caveatsLoading ? "Generating..." : "✦ Generate Caveats"}
-        </button>
-      </div>
+      <div style={s.sectionTitle}>Caveats and Exclusions</div>
       <div style={{fontSize:12,fontFamily:"sans-serif",color:MUTED,marginBottom:20}}>
         Edit or remove any caveat. These appear at the bottom of all output documents.
-        {" "}<span style={{color:"#5a8a5a"}}>AI generates caveats from matter type only — no client data is transmitted.</span>
       </div>
       {caveats.map((c,i) => (
         <div key={i} style={s.caveatRow}>
@@ -2270,7 +2102,7 @@ export default function App() {
             <button style={s.outputToggle(outputVersion==="internal")} onClick={()=>setOutputVersion("internal")}>Internal</button>
           </div>
           <div style={{fontSize:12,fontFamily:"sans-serif",color:MUTED,marginBottom:20}}>
-            {outputVersion==="client" ? "Clean budget with totals and caveats. AI rationale and hour breakdowns suppressed." : "Full detail including AI rationale and per-timekeeper hour breakdowns."}
+            {outputVersion==="client" ? "Clean budget with totals and caveats; hour breakdowns are suppressed." : "Full detail including per-timekeeper hour breakdowns."}
           </div>
         </div>
 
@@ -2321,9 +2153,6 @@ export default function App() {
                           </div>
                         );
                       })}
-                      {outputVersion==="internal" && t.aiRationale && (
-                        <div style={{fontSize:11,fontFamily:"sans-serif",color:"#5a8a5a",fontStyle:"italic",paddingLeft:20,paddingBottom:4}}>✦ {t.aiRationale}</div>
-                      )}
                     </div>
                   );
                 })}
@@ -2352,37 +2181,6 @@ export default function App() {
           )}
         </div>
 
-        <div style={s.card}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-            <div style={s.sectionTitle}>Budget Narrative</div>
-            <button style={s.btnAI} onClick={generateSummary} disabled={summaryLoading}>
-              {summaryLoading ? "Generating..." : "✦ Generate Summary"}
-            </button>
-          </div>
-          <div style={{fontSize:12,fontFamily:"sans-serif",color:MUTED,marginBottom:12}}>
-            A professional summary paragraph for cover emails or transmittal memos.
-            {" "}<span style={{color:"#5a8a5a"}}>Only fee amounts and matter type are sent — no client or matter names.</span>
-          </div>
-          {summary ? (
-            <>
-              <textarea
-                readOnly
-                value={summary}
-                style={{...s.caveatText,width:"100%",boxSizing:"border-box",minHeight:80,fontSize:13,color:TEXT,background:"#f7f6f3"}}
-              />
-              <button
-                style={{...s.btnSmall,marginTop:8}}
-                onClick={()=>{navigator.clipboard.writeText(summary);}}
-              >
-                Copy to clipboard
-              </button>
-            </>
-          ) : (
-            <div style={{fontSize:13,fontFamily:"sans-serif",color:MUTED,fontStyle:"italic"}}>
-              Click "Generate Summary" to draft a budget narrative.
-            </div>
-          )}
-        </div>
 
         {/* Monthly Spend Projection */}
         <div style={s.card}>
