@@ -11,6 +11,7 @@ import {
   calculatePhaseCost,
   calculateTaskCost,
 } from "./domain/budget.js";
+import { reviewBudget } from "./domain/readiness.js";
 
 // ── Phase Library ─────────────────────────────────────────────────────────────
 
@@ -1355,6 +1356,14 @@ export default function App() {
   // ── Excel Export ──────────────────────────────────────────────────────────
 
   const exportExcel = async () => {
+    if (
+      reviewBudget({ matter, phases, timekeepers }).some(
+        (issue) => issue.severity === "error",
+      )
+    ) {
+      setExportError("Resolve the readiness errors before exporting.");
+      return;
+    }
     setExportStatus("loading");
     setExportError("");
     try {
@@ -2104,8 +2113,38 @@ export default function App() {
 
   const Step6 = () => {
     const T = totals();
+    const readinessIssues = reviewBudget({ matter, phases, timekeepers });
+    const blockingIssues = readinessIssues.filter(
+      (issue) => issue.severity === "error",
+    );
     return (
       <div>
+        <div style={s.card}>
+          <div style={s.sectionTitle}>Export Readiness</div>
+          {readinessIssues.length === 0 ? (
+            <div role="status" style={{fontSize:13,fontFamily:"sans-serif",color:"#356b4b",lineHeight:1.5}}>
+              Ready to export. Required budget integrity checks passed.
+            </div>
+          ) : (
+            <>
+              <div style={{fontSize:12,fontFamily:"sans-serif",color:MUTED,marginBottom:12,lineHeight:1.5}}>
+                Errors block export. Warnings are worth reviewing but do not prevent it.
+              </div>
+              <div role={blockingIssues.length ? "alert" : "status"}>
+                {readinessIssues.map((issue) => (
+                  <div key={issue.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,padding:"10px 0",borderTop:`1px solid ${BORDER}`}}>
+                    <div style={{fontSize:12,fontFamily:"sans-serif",lineHeight:1.5,color:issue.severity==="error"?"#a33a32":"#8a4b08"}}>
+                      <strong style={{textTransform:"capitalize"}}>{issue.severity}:</strong> {issue.message}
+                    </div>
+                    <button type="button" onClick={()=>setStep(issue.step)} style={{...s.btnSmall,flexShrink:0}}>
+                      Fix in Step {issue.step}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         <div style={s.card}>
           <div style={s.sectionTitle}>Output Version</div>
           <div style={{display:"flex",gap:0,marginBottom:20}}>
@@ -2365,7 +2404,7 @@ export default function App() {
             Excel budget created successfully.
           </div>
         )}
-        <button style={{...s.btn(true),width:"100%"}} onClick={exportExcel} disabled={exportStatus === "loading"}>
+        <button style={{...s.btn(true),width:"100%"}} onClick={exportExcel} disabled={exportStatus === "loading" || blockingIssues.length > 0}>
           {exportStatus === "loading" ? "Preparing Excel…" : exportStatus === "error" ? "Retry Excel Export" : "↓ Download Excel"}
         </button>
       </div>

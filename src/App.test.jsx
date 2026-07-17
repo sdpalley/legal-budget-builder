@@ -271,7 +271,11 @@ describe("primary wizard workflow", () => {
       "Export sample",
     );
 
-    for (let step = 1; step < 6; step += 1) {
+    await user.click(screen.getByRole("button", { name: "Next →" }));
+    await user.click(screen.getByRole("button", { name: "Next →" }));
+    await user.type(screen.getAllByPlaceholderText("Low $")[0], "1");
+    await user.type(screen.getAllByPlaceholderText("High $")[0], "2");
+    for (let step = 3; step < 6; step += 1) {
       await user.click(screen.getByRole("button", { name: "Next →" }));
     }
     await user.click(screen.getByRole("button", { name: "↓ Download Excel" }));
@@ -282,9 +286,9 @@ describe("primary wizard workflow", () => {
         "Export_sample_budget.xlsx",
       );
     });
-    expect(screen.getByRole("status")).toHaveTextContent(
-      "Excel budget created successfully.",
-    );
+    expect(
+      screen.getByText("Excel budget created successfully."),
+    ).toHaveTextContent("Excel budget created successfully.");
   });
 
   it("shows a recoverable error when Excel writing fails", async () => {
@@ -297,7 +301,11 @@ describe("primary wizard workflow", () => {
     });
     await enterLitigationWizard(user);
 
-    for (let step = 1; step < 6; step += 1) {
+    await user.click(screen.getByRole("button", { name: "Next →" }));
+    await user.click(screen.getByRole("button", { name: "Next →" }));
+    await user.type(screen.getAllByPlaceholderText("Low $")[0], "1");
+    await user.type(screen.getAllByPlaceholderText("High $")[0], "2");
+    for (let step = 3; step < 6; step += 1) {
       await user.click(screen.getByRole("button", { name: "Next →" }));
     }
     await user.click(screen.getByRole("button", { name: "↓ Download Excel" }));
@@ -309,5 +317,25 @@ describe("primary wizard workflow", () => {
       screen.getByRole("button", { name: "Retry Excel Export" }),
     ).toBeEnabled();
     expect(consoleError).toHaveBeenCalled();
+  });
+
+  it("blocks an incomplete export and links readiness errors to their source", async () => {
+    const user = userEvent.setup();
+    await enterLitigationWizard(user);
+
+    for (let step = 1; step < 6; step += 1) {
+      await user.click(screen.getByRole("button", { name: "Next →" }));
+    }
+
+    expect(
+      screen.getByRole("button", { name: "↓ Download Excel" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Add a non-zero estimate",
+    );
+    await user.click(
+      screen.getAllByRole("button", { name: "Fix in Step 3" })[0],
+    );
+    expect(screen.getByText("Cost Ranges")).toBeInTheDocument();
   });
 });
