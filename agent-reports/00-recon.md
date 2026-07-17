@@ -16,28 +16,28 @@ The production build and both web and Electron launch paths work. Lint does not 
 
 The repository contains four commits:
 
-| Commit | Intent | Evidence |
-| --- | --- | --- |
-| `7f37c17` | Initial complete application | Added all 19 original files, including the 2,553-line `src/App.jsx` |
-| `46dde11` | Repair parallel release creation | Changed `.github/workflows/build.yml` and disabled implicit electron-builder publishing |
-| `783a50b` | Repair release permissions | Replaced the explicit release job with `contents: write` and per-platform release uploads |
-| `96c4e27` | Always show the landing page on launch | Changed `mode` initialization from the saved mode to `null` at `src/App.jsx:1116` |
+| Commit    | Intent                                 | Evidence                                                                                  |
+| --------- | -------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `7f37c17` | Initial complete application           | Added all 19 original files, including the 2,553-line `src/App.jsx`                       |
+| `46dde11` | Repair parallel release creation       | Changed `.github/workflows/build.yml` and disabled implicit electron-builder publishing   |
+| `783a50b` | Repair release permissions             | Replaced the explicit release job with `contents: write` and per-platform release uploads |
+| `96c4e27` | Always show the landing page on launch | Changed `mode` initialization from the saved mode to `null` at `src/App.jsx:1116`         |
 
 There is no long-lived churn history: nearly the entire application arrived in the initial commit. The only product-behavior change deliberately preserves saved budget data while returning users to the track chooser. That behavior should be protected by characterization tests.
 
 ## Stack and commands
 
-| Concern | Current implementation |
-| --- | --- |
-| UI | React 19.2.4, JSX, inline style objects, limited global CSS |
-| Build/dev | Vite 8.0.1 |
-| Desktop | Electron 41.0.3, electron-builder 26.8.1 |
-| Package manager | npm; lockfile version managed by npm 11.11.0 during recon |
-| Runtime used for recon | Node `v25.8.0`, npm `11.11.0` |
-| Export | `xlsx-js-style@1.2.0` loaded at runtime from jsDelivr (`src/App.jsx:1144-1149`) |
-| AI | Direct renderer requests to Anthropic (`src/App.jsx:1268-1393`) |
-| Persistence | Browser/Electron renderer `localStorage` key `lb_session` (`src/App.jsx:1103-1141`) |
-| CI/release | Tag-triggered GitHub Actions builds macOS DMGs and Windows installers, then uploads them to a GitHub release (`.github/workflows/build.yml:1-33`) |
+| Concern                | Current implementation                                                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI                     | React 19.2.4, JSX, inline style objects, limited global CSS                                                                                       |
+| Build/dev              | Vite 8.0.1                                                                                                                                        |
+| Desktop                | Electron 41.0.3, electron-builder 26.8.1                                                                                                          |
+| Package manager        | npm; lockfile version managed by npm 11.11.0 during recon                                                                                         |
+| Runtime used for recon | Node `v25.8.0`, npm `11.11.0`                                                                                                                     |
+| Export                 | `xlsx-js-style@1.2.0` loaded at runtime from jsDelivr (`src/App.jsx:1144-1149`)                                                                   |
+| AI                     | Direct renderer requests to Anthropic (`src/App.jsx:1268-1393`)                                                                                   |
+| Persistence            | Browser/Electron renderer `localStorage` key `lb_session` (`src/App.jsx:1103-1141`)                                                               |
+| CI/release             | Tag-triggered GitHub Actions builds macOS DMGs and Windows installers, then uploads them to a GitHub release (`.github/workflows/build.yml:1-33`) |
 
 Exact baseline commands:
 
@@ -54,22 +54,22 @@ npm audit --audit-level=high
 
 ## Baseline metrics
 
-| Metric | Baseline | Evidence / method |
-| --- | ---: | --- |
-| Tests | No test script; exit 1 | `npm test` reports `Missing script: "test"` |
-| Coverage | Not measurable; effectively 0% | No test files, test dependencies, or coverage command exist |
-| Lint | 3 errors, 1 warning; exit 1 | `npm run lint`; `src/App.jsx:1141`, `1174`, `1421`, `1422` |
-| Production build | Pass; median 0.60 s wall time | Three `/usr/bin/time -p npm run build` runs: 0.49, 0.60, 0.80 s |
-| Vite internal build | Median 136 ms | Three runs: 105, 136, 172 ms |
-| JS bundle | 301,402 B raw; 85.69 kB gzip | Vite production output |
-| CSS bundle | 1,788 B raw; 0.81 kB gzip | Vite production output |
-| Total `dist/` | 318,213 B | `find dist ... | xargs wc -c` |
-| Dev startup | 100 ms | Vite readiness output |
-| Local HTML latency | 3.729 ms median total | Five `curl` runs: 4.581, 3.218, 5.188, 3.729, 3.141 ms |
-| Local HTML TTFB | 3.578 ms median | Five `curl` runs: 4.420, 3.121, 5.017, 3.578, 2.947 ms |
-| Electron launch | Pass | `npm run electron`; renderer remained running until terminated with SIGINT |
-| Production dependency audit | 0 vulnerabilities | `npm audit --omit=dev --audit-level=low` |
-| Full dependency audit | 13 findings: 1 low, 6 moderate, 6 high | `npm audit --audit-level=high` |
+| Metric                      |                               Baseline | Evidence / method                                                          |
+| --------------------------- | -------------------------------------: | -------------------------------------------------------------------------- |
+| Tests                       |                 No test script; exit 1 | `npm test` reports `Missing script: "test"`                                |
+| Coverage                    |         Not measurable; effectively 0% | No test files, test dependencies, or coverage command exist                |
+| Lint                        |            3 errors, 1 warning; exit 1 | `npm run lint`; `src/App.jsx:1141`, `1174`, `1421`, `1422`                 |
+| Production build            |          Pass; median 0.60 s wall time | Three `/usr/bin/time -p npm run build` runs: 0.49, 0.60, 0.80 s            |
+| Vite internal build         |                          Median 136 ms | Three runs: 105, 136, 172 ms                                               |
+| JS bundle                   |           301,402 B raw; 85.69 kB gzip | Vite production output                                                     |
+| CSS bundle                  |              1,788 B raw; 0.81 kB gzip | Vite production output                                                     |
+| Total `dist/`               |                              318,213 B | `find dist ...                                                             | xargs wc -c` |
+| Dev startup                 |                                 100 ms | Vite readiness output                                                      |
+| Local HTML latency          |                  3.729 ms median total | Five `curl` runs: 4.581, 3.218, 5.188, 3.729, 3.141 ms                     |
+| Local HTML TTFB             |                        3.578 ms median | Five `curl` runs: 4.420, 3.121, 5.017, 3.578, 2.947 ms                     |
+| Electron launch             |                                   Pass | `npm run electron`; renderer remained running until terminated with SIGINT |
+| Production dependency audit |                      0 vulnerabilities | `npm audit --omit=dev --audit-level=low`                                   |
+| Full dependency audit       | 13 findings: 1 low, 6 moderate, 6 high | `npm audit --audit-level=high`                                             |
 
 The browser smoke test reached the landing page, selected Litigation, accepted the disclaimer, and reached Step 1 without console errors.
 

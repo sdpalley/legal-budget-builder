@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components -- helpers stay here until the tested domain extraction batch */
 import { useState, useEffect, useRef } from "react";
 
 // ── Phase Library ─────────────────────────────────────────────────────────────
@@ -1138,7 +1139,9 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem("lb_session", JSON.stringify({ mode, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline }));
-    } catch {}
+    } catch {
+      // Persistence is best-effort in the baseline implementation.
+    }
   }, [mode, matter, phases, timekeepers, contingency, feeType, caveats, timelineMode, phaseTimeline]);
 
   useEffect(() => {
@@ -1171,7 +1174,7 @@ export default function App() {
       prevMatterType.current = matter.type;
       setPhases(buildPhases(matter.type, mode));
     }
-  }, [matter.type]);
+  }, [matter.type, mode]);
 
   // ── Cost calculations ────────────────────────────────────────────────────
 
@@ -1418,9 +1421,6 @@ export default function App() {
     const alignR = { horizontal: "right", vertical: "center" };
     const alignC = { horizontal: "center",vertical: "center" };
     const bdrAll = (rgb = "CCCCCC") => ({ top:{style:"thin",color:{rgb}}, bottom:{style:"thin",color:{rgb}}, left:{style:"thin",color:{rgb}}, right:{style:"thin",color:{rgb}} });
-    const bdrTop = (rgb = "AAAAAA") => ({ top:{style:"medium",color:{rgb}} });
-    const bdrBot = (rgb = "AAAAAA") => ({ bottom:{style:"medium",color:{rgb}} });
-
     // Set a cell with value + optional style
     const sc = (col, row, val, fmt, formula, style) => {
       const ref = `${col}${row}`;

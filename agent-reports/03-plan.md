@@ -71,23 +71,23 @@ The test suite runs after every batch. Deviations and their reasons go in `agent
 
 ## Deferred
 
-| Proposal | Score | Reason |
-| --- | --- | --- |
-| PERF-P03 persistence debounce | `3/5/1/2` | Correctness first; last-edit loss risk exceeds an unmeasured typing benefit. |
-| PERF-P04/P05 and suspected PERF-01/02/03/04 optimizations | `3/5/2/3` | No representative runtime profile proves a user-facing performance problem. Profile after extraction. |
-| MOD-02 Electron 43 | `2/4/2/2` | Keep a major runtime migration separate from hardening; document the near-term EOL follow-up. |
-| MOD-03 preload bridge | `4/4/1/3` | No proven native Save As or diagnostics requirement justifies new IPC. |
-| Signing, notarization, SBOM, remote crash/error tracking | `3/3/1/3` | Credential-sensitive/operational scope. Document exact gaps; do not invent credentials or external telemetry. |
+| Proposal                                                  | Score     | Reason                                                                                                        |
+| --------------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------- |
+| PERF-P03 persistence debounce                             | `3/5/1/2` | Correctness first; last-edit loss risk exceeds an unmeasured typing benefit.                                  |
+| PERF-P04/P05 and suspected PERF-01/02/03/04 optimizations | `3/5/2/3` | No representative runtime profile proves a user-facing performance problem. Profile after extraction.         |
+| MOD-02 Electron 43                                        | `2/4/2/2` | Keep a major runtime migration separate from hardening; document the near-term EOL follow-up.                 |
+| MOD-03 preload bridge                                     | `4/4/1/3` | No proven native Save As or diagnostics requirement justifies new IPC.                                        |
+| Signing, notarization, SBOM, remote crash/error tracking  | `3/3/1/3` | Credential-sensitive/operational scope. Document exact gaps; do not invent credentials or external telemetry. |
 
 ## Rejected
 
-| Proposal | Score | Reason |
-| --- | --- | --- |
-| FEAT-03 editable/generated narrative | `3/3/2/4` | Adds a legal-prose surface after AI removal and is unnecessary for budget integrity. |
-| Search, dark mode, undo, scenario management | `4/4/1/5` | Kitchen-sink scope with weak connection to the core budgeting path. |
-| Accounts, cloud sync, collaboration | `4/5/1/5` | Requires a backend, identity, privacy, and operations that do not exist. |
-| Word/PDF export | `4/4/1/5` | Large artifact scope; reliable Excel is the demonstrated product path. Remove the disabled promise. |
-| Full platform rewrite, DI/repository framework, per-step file explosion | `5/5/3/5` | Replaces direct code with abstraction debt before product need is demonstrated. |
+| Proposal                                                                | Score     | Reason                                                                                              |
+| ----------------------------------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------- |
+| FEAT-03 editable/generated narrative                                    | `3/3/2/4` | Adds a legal-prose surface after AI removal and is unnecessary for budget integrity.                |
+| Search, dark mode, undo, scenario management                            | `4/4/1/5` | Kitchen-sink scope with weak connection to the core budgeting path.                                 |
+| Accounts, cloud sync, collaboration                                     | `4/5/1/5` | Requires a backend, identity, privacy, and operations that do not exist.                            |
+| Word/PDF export                                                         | `4/4/1/5` | Large artifact scope; reliable Excel is the demonstrated product path. Remove the disabled promise. |
+| Full platform rewrite, DI/repository framework, per-step file explosion | `5/5/3/5` | Replaces direct code with abstraction debt before product need is demonstrated.                     |
 
 ## Conflicts resolved
 
