@@ -4652,12 +4652,14 @@ export default function App() {
                 }}
               >
                 <input
+                  aria-label={`${tk.title || "Timekeeper"} name`}
                   style={s.input}
                   placeholder="e.g. J. Smith"
                   value={tk.name}
                   onChange={(e) => updateTk(tk.id, "name", e.target.value)}
                 />
                 <select
+                  aria-label={`${tk.name || "Timekeeper"} title`}
                   style={s.select}
                   value={tk.title}
                   onChange={(e) => updateTk(tk.id, "title", e.target.value)}
@@ -4669,6 +4671,7 @@ export default function App() {
                   ))}
                 </select>
                 <input
+                  aria-label={`${tk.name || tk.title || "Timekeeper"} hourly rate`}
                   style={{ ...s.input, textAlign: "right" }}
                   placeholder="e.g. 500"
                   value={tk.rate}
@@ -4758,6 +4761,7 @@ export default function App() {
                   <div key={t.id} style={s.taskRow}>
                     <input
                       type="checkbox"
+                      aria-label={`Include ${t.name}`}
                       checked={t.selected}
                       onChange={() => toggleTask(p.id, t.id)}
                       style={{ accentColor: ACCENT, flexShrink: 0 }}
@@ -4951,6 +4955,7 @@ export default function App() {
                               /* Manual dollar inputs */
                               <>
                                 <input
+                                  aria-label={`${t.name} low estimate`}
                                   style={s.moneyInput}
                                   placeholder="Low $"
                                   value={t.low}
@@ -4964,6 +4969,7 @@ export default function App() {
                                   }
                                 />
                                 <input
+                                  aria-label={`${t.name} high estimate`}
                                   style={s.moneyInput}
                                   placeholder="High $"
                                   value={t.high}
@@ -5113,6 +5119,7 @@ export default function App() {
                                         </div>
                                       </div>
                                       <input
+                                        aria-label={`${t.name}, ${tk.name || tk.title}, low hours`}
                                         style={s.hrsInput}
                                         placeholder="0"
                                         value={b.hoursLow}
@@ -5130,6 +5137,7 @@ export default function App() {
                                         }
                                       />
                                       <input
+                                        aria-label={`${t.name}, ${tk.name || tk.title}, high hours`}
                                         style={s.hrsInput}
                                         placeholder="0"
                                         value={b.hoursHigh}
@@ -5319,6 +5327,7 @@ export default function App() {
               Contingency
             </div>
             <input
+              aria-label="Contingency amount"
               style={{ ...s.moneyInput, width: 140 }}
               value={contingency}
               onChange={(e) =>
@@ -5519,6 +5528,7 @@ export default function App() {
             {i + 1}.
           </span>
           <textarea
+            aria-label={`Caveat ${i + 1}`}
             style={s.caveatText}
             value={c}
             onChange={(e) => {

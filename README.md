@@ -16,7 +16,7 @@ The statements above describe the current branch state and are deliberately expl
 
 ## Requirements
 
-- Node.js 22 (CI uses Node 22; the exact minimum will be declared with the toolchain-hardening batch)
+- Node.js 22 or newer (also declared in `package.json`; CI uses Node 22)
 - npm
 - macOS, Windows, or Linux for browser development
 - macOS or Windows for the configured desktop installers
