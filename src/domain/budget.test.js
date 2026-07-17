@@ -5,6 +5,7 @@ import {
   calculateBudgetTotals,
   calculatePhaseCost,
   calculateTaskCost,
+  removeTimekeeperAssignments,
 } from "./budget.js";
 
 const timekeepers = [
@@ -57,6 +58,15 @@ describe("budget calculations", () => {
     });
   });
 
+  it("removes deleted timekeepers from every task assignment", () => {
+    const updated = removeTimekeeperAssignments(phases, "partner");
+
+    expect(updated[0].tasks[1].tkBreakdown).toEqual([
+      { tkId: "associate", hoursLow: 2, hoursHigh: 4 },
+    ]);
+    expect(phases[0].tasks[1].tkBreakdown).toHaveLength(2);
+  });
+
   it("reconciles every automatic monthly projection to the grand total", () => {
     const projection = buildMonthlyProjection({
       phases,
@@ -105,5 +115,23 @@ describe("budget calculations", () => {
     expect(
       projection.monthlyData.reduce((sum, month) => sum + month.high, 0),
     ).toBe(5202);
+  });
+
+  it("caps untrusted manual values to a bounded projection", () => {
+    const projection = buildMonthlyProjection({
+      phases,
+      timekeepers,
+      contingency: 99,
+      totalMonths: 999999,
+      timelineMode: "manual",
+      phaseTimeline: {
+        "phase-1": { start: 999999, months: 999999 },
+        "phase-2": { start: 999999, months: 999999 },
+      },
+    });
+
+    expect(projection.projectionMonths).toBe(120);
+    expect(projection.timeline["phase-1"]).toEqual({ start: 120, months: 1 });
+    expect(projection.monthlyData).toHaveLength(120);
   });
 });

@@ -3,9 +3,11 @@ const toNumber = (value) => {
   return Number.isFinite(number) ? number : 0;
 };
 
+export const MAX_PROJECTION_MONTHS = 120;
+
 const toPositiveInteger = (value, fallback = 1) => {
   const number = Math.floor(toNumber(value));
-  return number >= 1 ? number : fallback;
+  return number >= 1 ? Math.min(number, MAX_PROJECTION_MONTHS) : fallback;
 };
 
 export function calculateTaskCost(task, timekeepers) {
@@ -51,6 +53,18 @@ export function calculateBudgetTotals(phases, timekeepers, contingency) {
     );
   const reserve = toNumber(contingency);
   return { low: taskTotals.low + reserve, high: taskTotals.high + reserve };
+}
+
+export function removeTimekeeperAssignments(phases, timekeeperId) {
+  return phases.map((phase) => ({
+    ...phase,
+    tasks: phase.tasks.map((task) => ({
+      ...task,
+      tkBreakdown:
+        task.tkBreakdown?.filter((entry) => entry.tkId !== timekeeperId) ||
+        null,
+    })),
+  }));
 }
 
 function allocateInteger(total, slots) {
@@ -105,14 +119,18 @@ export function buildMonthlyProjection({
   if (timelineMode === "manual") {
     activePhases.forEach((phase) => {
       const configured = phaseTimeline[phase.id] || {};
+      const start = toPositiveInteger(configured.start);
       timeline[phase.id] = {
-        start: toPositiveInteger(configured.start),
-        months: toPositiveInteger(
-          configured.months,
-          Math.max(
-            1,
-            Math.floor(requestedMonths / Math.max(activePhases.length, 1)),
+        start,
+        months: Math.min(
+          toPositiveInteger(
+            configured.months,
+            Math.max(
+              1,
+              Math.floor(requestedMonths / Math.max(activePhases.length, 1)),
+            ),
           ),
+          MAX_PROJECTION_MONTHS - start + 1,
         ),
       };
     });

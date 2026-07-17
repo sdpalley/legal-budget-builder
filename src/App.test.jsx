@@ -90,6 +90,9 @@ describe("primary wizard workflow", () => {
 
     await user.click(continueButton);
     expect(screen.getByText("Matter Information")).toBeInTheDocument();
+    expect(screen.getByLabelText("Matter Name")).toBeInTheDocument();
+    expect(screen.getByLabelText("Client")).toBeInTheDocument();
+    expect(screen.getByLabelText("Matter Type")).toBeInTheDocument();
   });
 
   it("resumes a saved draft without resetting its matter data", async () => {
