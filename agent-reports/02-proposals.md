@@ -1,6 +1,6 @@
 # Phase 2 — Improvement Proposals
 
-Date: 2026-07-17  
+Date: 2026-07-17
 Method: five parallel, read-only research lanes covering simplification, performance architecture, feature gaps, UX/accessibility, and modernization. Proposals are inputs to adversarial verification, not approvals.
 
 ## Product anchor

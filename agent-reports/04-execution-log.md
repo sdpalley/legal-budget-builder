@@ -1,7 +1,7 @@
 # Phase 4 — Execution Log
 
-Date started: 2026-07-17  
-Branch: `agent/overhaul-20260717`  
+Date started: 2026-07-17
+Branch: `agent/overhaul-20260717`
 Baseline tag: `agent-baseline`
 
 ## Batch 1 — Safety net and contributor gates

@@ -1,7 +1,7 @@
 # Phase 1 — Audit
 
-Date: 2026-07-17  
-Branch: `agent/overhaul-20260717`  
+Date: 2026-07-17
+Branch: `agent/overhaul-20260717`
 Method: five parallel, read-only audits covering correctness, performance, security/privacy, rot, and developer experience/operability. Duplicate findings were consolidated under one ID. Every item below is either verified or explicitly labeled suspected.
 
 ## Plain-English verdict

@@ -1,7 +1,7 @@
 # Phase 3 — Adversarial Plan
 
-Date: 2026-07-17  
-Verifier mandate: kill proposals that add unjustified scope, hidden coupling, or regression risk.  
+Date: 2026-07-17
+Verifier mandate: kill proposals that add unjustified scope, hidden coupling, or regression risk.
 Score order: **agent-legibility debt / regression risk / Chesterton-history risk / scope mismatch**, each 1 (low) to 5 (high).
 
 ## Plan verdict

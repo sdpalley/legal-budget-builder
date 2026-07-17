@@ -1,9 +1,9 @@
 # Phase 0 — Recon
 
-Date: 2026-07-17  
-Repository: `sdpalley/legal-budget-builder`  
-Baseline commit: `96c4e278872853eddf366b6c9294eebe5515305f`  
-Baseline tag: `agent-baseline`  
+Date: 2026-07-17
+Repository: `sdpalley/legal-budget-builder`
+Baseline commit: `96c4e278872853eddf366b6c9294eebe5515305f`
+Baseline tag: `agent-baseline`
 Working branch: `agent/overhaul-20260717`
 
 ## Executive summary

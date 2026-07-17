@@ -1,7 +1,7 @@
 # Legal Budget Builder Overhaul Design
 
-Status: Approved by delegated recommendation  
-Date: 2026-07-17  
+Status: Approved by delegated recommendation
+Date: 2026-07-17
 Product direction: Desktop-first, privacy-first; retain a functional web build where it does not compromise the desktop design
 
 ## Objective
