@@ -322,7 +322,7 @@ describe("primary wizard workflow", () => {
     expect(consoleError).toHaveBeenCalled();
   });
 
-  it("blocks an incomplete export and links readiness errors to their source", async () => {
+  it("exports an incomplete draft and links review notes to their source", async () => {
     const user = userEvent.setup();
     await enterLitigationWizard(user);
 
@@ -330,12 +330,17 @@ describe("primary wizard workflow", () => {
       await user.click(screen.getByRole("button", { name: "Next →" }));
     }
 
+    expect(screen.getByRole("button", { name: "↓ Download Excel" })).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: "↓ Download Excel" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Add a non-zero estimate",
-    );
+      screen.getByText(/Add a non-zero estimate to at least one selected task/),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "↓ Download Excel" }));
+    await waitFor(() => {
+      expect(workbookMocks.writeFile).toHaveBeenCalledWith(
+        expect.any(Object),
+        "budget_budget.xlsx",
+      );
+    });
     await user.click(
       screen.getAllByRole("button", { name: "Fix in Step 3" })[0],
     );

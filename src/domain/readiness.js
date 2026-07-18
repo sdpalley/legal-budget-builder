@@ -43,7 +43,7 @@ export function reviewBudget({ matter, phases, timekeepers }) {
       "selected-tasks",
       "error",
       2,
-      "Select at least one task before exporting the budget.",
+      "Select at least one task to make this a complete budget.",
     );
     return issues;
   }
@@ -104,7 +104,7 @@ export function reviewBudget({ matter, phases, timekeepers }) {
       "costed-task",
       "error",
       3,
-      "Add a non-zero estimate to at least one selected task before exporting.",
+      "Add a non-zero estimate to at least one selected task for a complete budget.",
     );
   }
 

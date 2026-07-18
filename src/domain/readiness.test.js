@@ -29,7 +29,7 @@ describe("budget readiness review", () => {
     expect(reviewBudget(base)).toEqual([]);
   });
 
-  it("blocks export when no selected work has a cost", () => {
+  it("reports no-cost work for review without determining export access", () => {
     const issues = reviewBudget({
       ...base,
       matter: { name: "", client: "" },
@@ -62,7 +62,57 @@ describe("budget readiness review", () => {
     );
   });
 
-  it("flags inverted ranges and missing rates as blocking errors", () => {
+  it("reports an unnamed timekeeper", () => {
+    const issues = reviewBudget({
+      ...base,
+      timekeepers: [{ ...base.timekeepers[0], name: "" }],
+    });
+
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        id: "timekeeper-name-partner",
+        severity: "warning",
+        step: 1,
+      }),
+    );
+  });
+
+  it("reports when no work is selected", () => {
+    const issues = reviewBudget({
+      ...base,
+      phases: [{ ...base.phases[0], selected: false }],
+    });
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        id: "selected-tasks",
+        severity: "error",
+        step: 2,
+      }),
+    ]);
+  });
+
+  it("reports an inverted direct-cost range", () => {
+    const issues = reviewBudget({
+      ...base,
+      phases: [
+        {
+          ...base.phases[0],
+          tasks: [{ ...base.phases[0].tasks[0], low: 2000, high: 1000 }],
+        },
+      ],
+    });
+
+    expect(issues).toContainEqual(
+      expect.objectContaining({
+        id: "cost-range-task",
+        severity: "error",
+        step: 3,
+      }),
+    );
+  });
+
+  it("flags inverted ranges and missing rates for review", () => {
     const issues = reviewBudget({
       ...base,
       timekeepers: [{ ...base.timekeepers[0], rate: "" }],

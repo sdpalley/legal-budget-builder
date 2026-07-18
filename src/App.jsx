@@ -3945,14 +3945,6 @@ export default function App() {
   // ── Excel Export ──────────────────────────────────────────────────────────
 
   const exportExcel = async () => {
-    if (
-      reviewBudget({ matter, phases, timekeepers }).some(
-        (issue) => issue.severity === "error",
-      )
-    ) {
-      setExportError("Resolve the readiness errors before exporting.");
-      return;
-    }
     setExportStatus("loading");
     setExportError("");
     try {
@@ -5995,9 +5987,6 @@ export default function App() {
   const Step6 = () => {
     const T = totals();
     const readinessIssues = reviewBudget({ matter, phases, timekeepers });
-    const blockingIssues = readinessIssues.filter(
-      (issue) => issue.severity === "error",
-    );
     return (
       <div>
         <div className="ai-workflow-card ai-workflow-card--compact">
@@ -6042,7 +6031,7 @@ export default function App() {
           />
         </div>
         <div style={s.card}>
-          <div style={s.sectionTitle}>Export Readiness</div>
+          <div style={s.sectionTitle}>Export Review</div>
           {readinessIssues.length === 0 ? (
             <div
               role="status"
@@ -6053,7 +6042,7 @@ export default function App() {
                 lineHeight: 1.5,
               }}
             >
-              Ready to export. Required budget integrity checks passed.
+              No review notes. Your budget is ready to export.
             </div>
           ) : (
             <>
@@ -6066,10 +6055,10 @@ export default function App() {
                   lineHeight: 1.5,
                 }}
               >
-                Errors block export. Warnings are worth reviewing but do not
-                prevent it.
+                Review these notes before sharing a final budget. You can
+                download an Excel draft at any time.
               </div>
-              <div role={blockingIssues.length ? "alert" : "status"}>
+              <div role="status">
                 {readinessIssues.map((issue) => (
                   <div
                     key={issue.id}
@@ -6869,7 +6858,7 @@ export default function App() {
         <button
           style={{ ...s.btn(true), width: "100%" }}
           onClick={exportExcel}
-          disabled={exportStatus === "loading" || blockingIssues.length > 0}
+          disabled={exportStatus === "loading"}
         >
           {exportStatus === "loading"
             ? "Preparing Excel…"
