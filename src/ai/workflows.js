@@ -113,7 +113,10 @@ export const WORKFLOWS = Object.freeze({
             additionalProperties: false,
             required: ["severity", "message"],
             properties: {
-              severity: { type: "string", enum: ["info", "warning", "critical"] },
+              severity: {
+                type: "string",
+                enum: ["info", "warning", "critical"],
+              },
               message: { type: "string" },
               suggestedCaveat: { type: "string" },
             },
@@ -137,7 +140,10 @@ export const WORKFLOWS = Object.freeze({
             additionalProperties: false,
             required: ["severity", "message"],
             properties: {
-              severity: { type: "string", enum: ["info", "warning", "critical"] },
+              severity: {
+                type: "string",
+                enum: ["info", "warning", "critical"],
+              },
               message: { type: "string" },
               taskId: { type: "string" },
             },
@@ -161,7 +167,10 @@ export const WORKFLOWS = Object.freeze({
             additionalProperties: false,
             required: ["action", "summary"],
             properties: {
-              action: { type: "string", enum: ["add", "edit", "move", "remove"] },
+              action: {
+                type: "string",
+                enum: ["add", "edit", "move", "remove"],
+              },
               summary: { type: "string" },
               phaseId: { type: "string" },
               taskId: { type: "string" },
@@ -186,13 +195,15 @@ const cleanTasks = (phases = [], includeCosts = true) =>
   (Array.isArray(phases) ? phases : []).slice(0, 60).map((phase) => ({
     id: cleanText(phase.id, 100),
     name: cleanText(phase.name, 240),
-    tasks: (Array.isArray(phase.tasks) ? phase.tasks : []).slice(0, 250).map((task) => ({
-      id: cleanText(task.id, 100),
-      name: cleanText(task.name, 300),
-      ...(includeCosts
-        ? { low: cleanNumber(task.low), high: cleanNumber(task.high) }
-        : {}),
-    })),
+    tasks: (Array.isArray(phase.tasks) ? phase.tasks : [])
+      .slice(0, 250)
+      .map((task) => ({
+        id: cleanText(task.id, 100),
+        name: cleanText(task.name, 300),
+        ...(includeCosts
+          ? { low: cleanNumber(task.low), high: cleanNumber(task.high) }
+          : {}),
+      })),
   }));
 
 const context = (input) => ({
@@ -203,12 +214,16 @@ const context = (input) => ({
 });
 
 export function buildWorkflowPayload(workflowId, input = {}) {
-  if (!WORKFLOWS[workflowId]) throw new Error(`Unknown AI workflow: ${workflowId}`);
+  if (!WORKFLOWS[workflowId])
+    throw new Error(`Unknown AI workflow: ${workflowId}`);
 
   const base = context(input);
   switch (workflowId) {
     case "scope_draft":
-      return { ...base, anonymizedScope: cleanText(input.anonymizedScope, 12000) };
+      return {
+        ...base,
+        anonymizedScope: cleanText(input.anonymizedScope, 12000),
+      };
     case "task_estimate":
       return {
         ...base,
@@ -216,7 +231,10 @@ export function buildWorkflowPayload(workflowId, input = {}) {
           id: cleanText(input.task?.id, 100),
           name: cleanText(input.task?.name, 300),
         },
-        timekeepers: (Array.isArray(input.timekeepers) ? input.timekeepers : []).map((item) => ({
+        timekeepers: (Array.isArray(input.timekeepers)
+          ? input.timekeepers
+          : []
+        ).map((item) => ({
           role: cleanText(item.role || item.name, 160),
           rate: cleanNumber(item.rate),
         })),
@@ -225,32 +243,45 @@ export function buildWorkflowPayload(workflowId, input = {}) {
       return {
         ...base,
         phases: cleanTasks(input.phases, false),
-        timekeepers: (Array.isArray(input.timekeepers) ? input.timekeepers : []).map((item) => ({
+        timekeepers: (Array.isArray(input.timekeepers)
+          ? input.timekeepers
+          : []
+        ).map((item) => ({
           role: cleanText(item.role || item.name, 160),
           rate: cleanNumber(item.rate),
         })),
       };
     case "caveat_draft":
-      return { ...base, phases: cleanTasks(input.phases), totals: cleanRange(input.totals) };
+      return {
+        ...base,
+        phases: cleanTasks(input.phases),
+        totals: cleanRange(input.totals),
+      };
     case "budget_narrative":
       return {
         ...base,
         phases: cleanTasks(input.phases),
         totals: cleanRange(input.totals),
-        caveats: (Array.isArray(input.caveats) ? input.caveats : []).map((item) => cleanText(item, 1000)),
+        caveats: (Array.isArray(input.caveats) ? input.caveats : []).map(
+          (item) => cleanText(item, 1000),
+        ),
       };
     case "assumption_review":
       return {
         ...base,
         phases: cleanTasks(input.phases),
-        caveats: (Array.isArray(input.caveats) ? input.caveats : []).map((item) => cleanText(item, 1000)),
+        caveats: (Array.isArray(input.caveats) ? input.caveats : []).map(
+          (item) => cleanText(item, 1000),
+        ),
       };
     case "integrity_review":
       return {
         ...base,
         phases: cleanTasks(input.phases),
         totals: cleanRange(input.totals),
-        caveats: (Array.isArray(input.caveats) ? input.caveats : []).map((item) => cleanText(item, 1000)),
+        caveats: (Array.isArray(input.caveats) ? input.caveats : []).map(
+          (item) => cleanText(item, 1000),
+        ),
       };
     case "change_plan":
       return {
@@ -281,35 +312,84 @@ function isRange(value) {
 }
 
 export function validateWorkflowResult(workflowId, value) {
-  if (!WORKFLOWS[workflowId]) return { valid: false, errors: ["Unknown workflow."] };
+  if (!WORKFLOWS[workflowId])
+    return { valid: false, errors: ["Unknown workflow."] };
   const errors = [];
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return { valid: false, errors: ["The provider did not return an object."] };
   }
 
-  if (workflowId === "task_estimate" && (!isRange(value) || !isNonEmptyString(value.rationale))) {
-    errors.push("The task estimate needs a valid low/high range and rationale.");
+  if (
+    workflowId === "task_estimate" &&
+    (!isRange(value) || !isNonEmptyString(value.rationale))
+  ) {
+    errors.push(
+      "The task estimate needs a valid low/high range and rationale.",
+    );
   }
   if (workflowId === "all_task_estimates") {
-    if (!Array.isArray(value.suggestions) || value.suggestions.some((item) => !isRange(item) || !isNonEmptyString(item.taskId) || !isNonEmptyString(item.rationale))) {
-      errors.push("Every task suggestion needs an ID, valid range, and rationale.");
+    if (
+      !Array.isArray(value.suggestions) ||
+      value.suggestions.some(
+        (item) =>
+          !isRange(item) ||
+          !isNonEmptyString(item.taskId) ||
+          !isNonEmptyString(item.rationale),
+      )
+    ) {
+      errors.push(
+        "Every task suggestion needs an ID, valid range, and rationale.",
+      );
     }
   }
   if (workflowId === "scope_draft") {
-    if (!Array.isArray(value.phases) || value.phases.some((phase) => !isNonEmptyString(phase.name) || !Array.isArray(phase.tasks) || phase.tasks.some((task) => !isNonEmptyString(task.name) || (task.range && !isRange(task.range))))) {
-      errors.push("Every phase and task needs a name, and optional ranges must be valid.");
+    if (
+      !Array.isArray(value.phases) ||
+      value.phases.some(
+        (phase) =>
+          !isNonEmptyString(phase.name) ||
+          !Array.isArray(phase.tasks) ||
+          phase.tasks.some(
+            (task) =>
+              !isNonEmptyString(task.name) ||
+              (task.range && !isRange(task.range)),
+          ),
+      )
+    ) {
+      errors.push(
+        "Every phase and task needs a name, and optional ranges must be valid.",
+      );
     }
   }
-  if (workflowId === "caveat_draft" && (!Array.isArray(value.caveats) || value.caveats.some((item) => !isNonEmptyString(item)))) errors.push("Caveats must be non-empty text.");
-  if (workflowId === "budget_narrative" && !isNonEmptyString(value.narrative)) errors.push("The narrative is empty.");
+  if (
+    workflowId === "caveat_draft" &&
+    (!Array.isArray(value.caveats) ||
+      value.caveats.some((item) => !isNonEmptyString(item)))
+  )
+    errors.push("Caveats must be non-empty text.");
+  if (workflowId === "budget_narrative" && !isNonEmptyString(value.narrative))
+    errors.push("The narrative is empty.");
   if (["assumption_review", "integrity_review"].includes(workflowId)) {
     const severities = new Set(["info", "warning", "critical"]);
-    if (!Array.isArray(value.findings) || value.findings.some((item) => !severities.has(item?.severity) || !isNonEmptyString(item?.message))) errors.push("Every finding needs a recognized severity and message.");
+    if (
+      !Array.isArray(value.findings) ||
+      value.findings.some(
+        (item) =>
+          !severities.has(item?.severity) || !isNonEmptyString(item?.message),
+      )
+    )
+      errors.push("Every finding needs a recognized severity and message.");
   }
   if (workflowId === "change_plan") {
     const actions = new Set(["add", "edit", "move", "remove"]);
-    if (!Array.isArray(value.operations) || value.operations.some((item) => !actions.has(item?.action) || !isNonEmptyString(item?.summary))) errors.push("Every change needs a recognized action and summary.");
+    if (
+      !Array.isArray(value.operations) ||
+      value.operations.some(
+        (item) =>
+          !actions.has(item?.action) || !isNonEmptyString(item?.summary),
+      )
+    )
+      errors.push("Every change needs a recognized action and summary.");
   }
   return { valid: errors.length === 0, errors };
 }
-

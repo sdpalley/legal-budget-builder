@@ -10,6 +10,17 @@ import {
   removeTimekeeperAssignments,
 } from "./domain/budget.js";
 import { reviewBudget } from "./domain/readiness.js";
+import { aiClient } from "./ai/client.js";
+import {
+  buildWorkflowPayload,
+  validateWorkflowResult,
+  WORKFLOWS,
+} from "./ai/workflows.js";
+import { normalizeRouting, resolveRoute } from "./ai/routing.js";
+import AISettings from "./components/settings/AISettings.jsx";
+import DataPreviewDialog from "./components/ai/DataPreviewDialog.jsx";
+import SuggestionDialog from "./components/ai/SuggestionDialog.jsx";
+import WorkspaceShell from "./components/workspace/WorkspaceShell.jsx";
 
 // ── Phase Library ─────────────────────────────────────────────────────────────
 
@@ -2819,9 +2830,7 @@ function LandingCard({ title, sub, icon, onClick }) {
         font: "inherit",
       }}
     >
-      <div style={{ fontSize: 38, marginBottom: 18, lineHeight: 1 }}>
-        {icon}
-      </div>
+      <TrackIcon type={icon} />
       <div
         style={{
           fontSize: 16,
@@ -2845,6 +2854,36 @@ function LandingCard({ title, sub, icon, onClick }) {
         {sub}
       </div>
     </button>
+  );
+}
+
+function TrackIcon({ type }) {
+  const paths = {
+    litigation: (
+      <>
+        <path d="M16 5v20M8 9h16M9 9 4.5 18h9L9 9Zm14 0-4.5 9h9L23 9ZM12 26h8" />
+        <path d="M4.5 18c0 2.5 2 4 4.5 4s4.5-1.5 4.5-4M18.5 18c0 2.5 2 4 4.5 4s4.5-1.5 4.5-4" />
+      </>
+    ),
+    corporate: (
+      <>
+        <rect x="6" y="5" width="20" height="22" rx="2" />
+        <path d="M11 5V3h10v2M11 11h10M11 16h10M11 21h7" />
+      </>
+    ),
+    tax: (
+      <>
+        <path d="M7 3h18v26l-3-2-3 2-3-2-3 2-3-2-3 2V3Z" />
+        <path d="M11 9h10M11 14h10M11 19h5M20 19h1" />
+      </>
+    ),
+  };
+  return (
+    <div className="landing-card__icon">
+      <svg aria-hidden="true" viewBox="0 0 32 32">
+        {paths[type]}
+      </svg>
+    </div>
   );
 }
 
@@ -3061,19 +3100,19 @@ function LandingPage({
           <LandingCard
             title="Litigation & Dispute Resolution"
             sub="Court proceedings, arbitration, regulatory enforcement, and other contested matters."
-            icon="⚖"
+            icon="litigation"
             onClick={() => onSelect("litigation")}
           />
           <LandingCard
             title="Corporate & Transactional"
             sub="M&A, capital markets, private equity, real estate, lending, and other deal work."
-            icon="📋"
+            icon="corporate"
             onClick={() => onSelect("corporate")}
           />
           <LandingCard
             title="Tax"
             sub="IRS controversy, Tax Court, SALT, transfer pricing, criminal tax, and transactional tax planning."
-            icon="🧾"
+            icon="tax"
             onClick={() => onSelect("tax")}
           />
         </div>
@@ -3154,9 +3193,10 @@ function DisclaimerPage({ onAccept, onBack }) {
             database.
             <br />
             <br />
-            The budgeting workflow does not transmit matter data to an
-            application server or AI service. Excel export is generated from the
-            draft in this app.
+            Manual budgeting and Excel export stay on this device. Optional AI
+            features send only the anonymized payload you preview to the
+            provider and model you configure. AI is disabled until you add your
+            own key.
             <br />
             <br />
             <strong>Use anonymized/sample data only.</strong>
@@ -3274,6 +3314,17 @@ const defaultCaveatsForMode = (mode) =>
       ? [...TAX_CAVEATS]
       : [...DEFAULT_CAVEATS];
 
+const AI_ROUTING_KEY = "legal-budget-builder.ai-routing.v1";
+const readAIRouting = () => {
+  try {
+    return normalizeRouting(
+      JSON.parse(localStorage.getItem(AI_ROUTING_KEY) || "{}"),
+    );
+  } catch {
+    return normalizeRouting({});
+  }
+};
+
 export default function App() {
   const [initialDraftResult] = useState(() => readDraft(localStorage));
   const initialDraft = initialDraftResult.draft;
@@ -3299,6 +3350,17 @@ export default function App() {
   const [caveats, setCaveats] = useState(
     initialDraft?.caveats || defaultCaveatsForMode(savedMode || "litigation"),
   );
+  const [aiScope, setAIScope] = useState(initialDraft?.aiScope || "");
+  const [clientNarrative, setClientNarrative] = useState(
+    initialDraft?.clientNarrative || "",
+  );
+  const [aiRouting, setAIRouting] = useState(readAIRouting);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aiPending, setAIPending] = useState(null);
+  const [aiSuggestion, setAISuggestion] = useState(null);
+  const [aiBusy, setAIBusy] = useState(false);
+  const [aiError, setAIError] = useState("");
+  const [changeInstruction, setChangeInstruction] = useState("");
   const [outputVersion, setOutputVersion] = useState("client");
   const modeLabels =
     mode === "corporate"
@@ -3334,6 +3396,8 @@ export default function App() {
       contingency,
       feeType,
       caveats,
+      aiScope,
+      clientNarrative,
       timelineMode,
       phaseTimeline,
     });
@@ -3355,10 +3419,20 @@ export default function App() {
     contingency,
     feeType,
     caveats,
+    aiScope,
+    clientNarrative,
     timelineMode,
     phaseTimeline,
     persistenceEnabled,
   ]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AI_ROUTING_KEY, JSON.stringify(aiRouting));
+    } catch {
+      /* Routing preferences are non-critical. */
+    }
+  }, [aiRouting]);
 
   const hydrateDraft = (draft) => {
     setPersistenceEnabled(true);
@@ -3368,6 +3442,8 @@ export default function App() {
     setContingency(draft.contingency);
     setFeeType(draft.feeType);
     setCaveats(draft.caveats);
+    setAIScope(draft.aiScope || "");
+    setClientNarrative(draft.clientNarrative || "");
     setTimelineMode(draft.timelineMode);
     setPhaseTimeline(draft.phaseTimeline);
     setMode(draft.mode);
@@ -3408,6 +3484,8 @@ export default function App() {
     setContingency(100000);
     setFeeType("hourly");
     setCaveats(defaultCaveatsForMode(nextMode));
+    setAIScope("");
+    setClientNarrative("");
     setTimelineMode("auto");
     setPhaseTimeline({});
     setMode(nextMode);
@@ -3486,6 +3564,178 @@ export default function App() {
   const taskCost = (task) => calculateTaskCost(task, timekeepers);
   const totals = () => calculateBudgetTotals(phases, timekeepers, contingency);
 
+  const aiContext = (extra = {}) => ({
+    matterType: modeLabels[matter.type] || matter.type,
+    jurisdiction: matter.jurisdiction,
+    durationMonths: parseDurationMonths(matter.duration),
+    feeType,
+    phases,
+    timekeepers: timekeepers.map((timekeeper) => ({
+      role: timekeeper.title,
+      rate: timekeeper.rate,
+    })),
+    totals: totals(),
+    caveats,
+    ...extra,
+  });
+
+  const requestAI = (workflowId, extra, apply) => {
+    setAIError("");
+    try {
+      const route = resolveRoute(workflowId, aiRouting);
+      const payload = buildWorkflowPayload(workflowId, aiContext(extra));
+      setAIPending({ workflowId, route, payload, apply });
+    } catch (error) {
+      setAIError(error.message);
+    }
+  };
+
+  const runPendingAI = async () => {
+    if (!aiPending) return;
+    setAIBusy(true);
+    setAIError("");
+    const pending = aiPending;
+    setAIPending(null);
+    try {
+      const response = await aiClient.runWorkflow({
+        workflowId: pending.workflowId,
+        provider: pending.route.provider,
+        model: pending.route.model,
+        payload: pending.payload,
+      });
+      const validation = validateWorkflowResult(
+        pending.workflowId,
+        response.result,
+      );
+      if (!validation.valid) throw new Error(validation.errors.join(" "));
+      setAISuggestion({ ...pending, result: response.result });
+    } catch (error) {
+      setAIError(error.message || "The AI suggestion could not be generated.");
+    } finally {
+      setAIBusy(false);
+    }
+  };
+
+  const applyScopeDraft = (result) => {
+    setPhases(
+      result.phases.map((phase) => ({
+        id: uid(),
+        name: phase.name,
+        selected: true,
+        tasks: phase.tasks.map((task) => ({
+          id: uid(),
+          name: task.name,
+          note: "",
+          selected: true,
+          low: task.range?.low || "",
+          high: task.range?.high || "",
+          aiRationale: "AI-drafted scope; reviewed and accepted by the user.",
+          tkBreakdown: null,
+        })),
+      })),
+    );
+    setStep(2);
+  };
+
+  const applyAllEstimates = (result) =>
+    setPhases((current) =>
+      current.map((phase) => ({
+        ...phase,
+        tasks: phase.tasks.map((task) => {
+          const suggestion = result.suggestions.find(
+            (item) => item.taskId === task.id,
+          );
+          return suggestion
+            ? {
+                ...task,
+                low: suggestion.low,
+                high: suggestion.high,
+                aiRationale: suggestion.rationale,
+                tkBreakdown: null,
+              }
+            : task;
+        }),
+      })),
+    );
+
+  const applyChangePlan = (result) =>
+    setPhases((current) => {
+      let next = current.map((phase) => ({
+        ...phase,
+        tasks: [...phase.tasks],
+      }));
+      for (const operation of result.operations) {
+        if (operation.action === "add" && operation.phaseId) {
+          next = next.map((phase) =>
+            phase.id === operation.phaseId
+              ? {
+                  ...phase,
+                  tasks: [
+                    ...phase.tasks,
+                    {
+                      id: uid(),
+                      name: operation.name || operation.summary,
+                      note: "",
+                      selected: true,
+                      low: "",
+                      high: "",
+                      aiRationale:
+                        "AI-planned scope change; reviewed and accepted by the user.",
+                      tkBreakdown: null,
+                    },
+                  ],
+                }
+              : phase,
+          );
+        } else if (operation.action === "add") {
+          next.push({
+            id: uid(),
+            name: operation.name || operation.summary,
+            selected: true,
+            tasks: [],
+          });
+        } else if (operation.action === "edit" && operation.taskId) {
+          next = next.map((phase) => ({
+            ...phase,
+            tasks: phase.tasks.map((task) =>
+              task.id === operation.taskId
+                ? { ...task, name: operation.name || operation.summary }
+                : task,
+            ),
+          }));
+        } else if (operation.action === "remove" && operation.taskId) {
+          next = next.map((phase) => ({
+            ...phase,
+            tasks: phase.tasks.filter((task) => task.id !== operation.taskId),
+          }));
+        } else if (operation.action === "remove" && operation.phaseId) {
+          next = next.filter((phase) => phase.id !== operation.phaseId);
+        } else if (
+          operation.action === "move" &&
+          operation.taskId &&
+          operation.phaseId
+        ) {
+          const task = next
+            .flatMap((phase) => phase.tasks)
+            .find((item) => item.id === operation.taskId);
+          if (task)
+            next = next.map((phase) => ({
+              ...phase,
+              tasks:
+                phase.id === operation.phaseId
+                  ? [
+                      ...phase.tasks.filter(
+                        (item) => item.id !== operation.taskId,
+                      ),
+                      task,
+                    ]
+                  : phase.tasks.filter((item) => item.id !== operation.taskId),
+            }));
+        }
+      }
+      return next;
+    });
+
   // ── Timekeeper mutations ──────────────────────────────────────────────────
 
   const addTk = () =>
@@ -3530,6 +3780,27 @@ export default function App() {
               ...p,
               tasks: p.tasks.map((t) =>
                 t.id === tid ? { ...t, [field]: val } : t,
+              ),
+            },
+      ),
+    );
+  const updateTaskEstimate = (pid, tid, result) =>
+    setPhases((prev) =>
+      prev.map((phase) =>
+        phase.id !== pid
+          ? phase
+          : {
+              ...phase,
+              tasks: phase.tasks.map((task) =>
+                task.id === tid
+                  ? {
+                      ...task,
+                      low: result.low,
+                      high: result.high,
+                      aiRationale: result.rationale,
+                      tkBreakdown: null,
+                    }
+                  : task,
               ),
             },
       ),
@@ -4579,6 +4850,39 @@ export default function App() {
         )}
       </div>
 
+      <div className="ai-workflow-card">
+        <div>
+          <span className="ai-eyebrow">Optional AI</span>
+          <h2>Draft an anonymized scope</h2>
+          <p>
+            Describe the work without client names, matter names, privileged
+            facts, or personal information. You will preview the exact payload
+            before anything is sent.
+          </p>
+        </div>
+        <textarea
+          aria-label="Anonymized scope for AI"
+          value={aiScope}
+          onChange={(event) => setAIScope(event.target.value)}
+          rows={4}
+          placeholder="Example: Commercial contract dispute, two fact witnesses, expected dispositive motion, 12-month schedule."
+        />
+        <button
+          type="button"
+          className="ai-action-button"
+          disabled={aiBusy || !aiScope.trim()}
+          onClick={() =>
+            requestAI(
+              "scope_draft",
+              { anonymizedScope: aiScope },
+              applyScopeDraft,
+            )
+          }
+        >
+          {aiBusy ? "AI is working…" : "Draft phases & tasks"}
+        </button>
+      </div>
+
       {/* Timekeepers */}
       <div style={s.card}>
         <div
@@ -4709,6 +5013,41 @@ export default function App() {
 
   const Step2 = () => (
     <div>
+      <div className="ai-workflow-card ai-workflow-card--compact">
+        <div>
+          <span className="ai-eyebrow">AI scope editor</span>
+          <h2>Describe a change</h2>
+          <p>
+            Try “add two depositions” or “move contract analysis into
+            discovery.” The app shows a change plan before applying it.
+          </p>
+        </div>
+        <div className="ai-inline-action">
+          <input
+            aria-label="Natural-language budget change"
+            value={changeInstruction}
+            onChange={(event) => setChangeInstruction(event.target.value)}
+            placeholder="Describe a scope change…"
+          />
+          <button
+            type="button"
+            className="ai-action-button"
+            disabled={aiBusy || !changeInstruction.trim()}
+            onClick={() =>
+              requestAI(
+                "change_plan",
+                { instruction: changeInstruction },
+                (result) => {
+                  applyChangePlan(result);
+                  setChangeInstruction("");
+                },
+              )
+            }
+          >
+            Plan changes
+          </button>
+        </div>
+      </div>
       <div style={s.card}>
         <div
           style={{
@@ -4825,6 +5164,16 @@ export default function App() {
       <div>
         <div style={s.card}>
           <div style={s.sectionTitle}>Cost Ranges</div>
+          <button
+            type="button"
+            className="ai-action-button ai-action-button--small"
+            disabled={aiBusy}
+            onClick={() =>
+              requestAI("all_task_estimates", {}, applyAllEstimates)
+            }
+          >
+            Suggest all task ranges
+          </button>
           <div
             style={{
               fontSize: 12,
@@ -4916,6 +5265,11 @@ export default function App() {
                                 <span style={s.taskNote}>[{t.note}]</span>
                               )}
                             </div>
+                            {t.aiRationale && (
+                              <div className="ai-rationale">
+                                AI rationale: {t.aiRationale}
+                              </div>
+                            )}
                           </div>
 
                           <div
@@ -5011,6 +5365,25 @@ export default function App() {
                                 {hasBreakdown ? "÷ off" : "÷ hrs"}
                               </button>
                             )}
+                            <button
+                              type="button"
+                              className="ai-spark-button"
+                              aria-label={`Suggest estimate for ${t.name}`}
+                              title="Suggest estimate with AI"
+                              disabled={aiBusy}
+                              onClick={() =>
+                                requestAI(
+                                  "task_estimate",
+                                  { task: { id: t.id, name: t.name } },
+                                  (result) =>
+                                    updateTaskEstimate(p.id, t.id, result),
+                                )
+                              }
+                            >
+                              <svg aria-hidden="true" viewBox="0 0 20 20">
+                                <path d="m10 2 1.3 4.2L15.5 8l-4.2 1.8L10 14l-1.3-4.2L4.5 8l4.2-1.8L10 2Z" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
 
@@ -5502,7 +5875,44 @@ export default function App() {
 
   const Step5 = () => (
     <div style={s.card}>
-      <div style={s.sectionTitle}>Caveats and Exclusions</div>
+      <div className="ai-section-heading">
+        <div style={s.sectionTitle}>Caveats and Exclusions</div>
+        <div>
+          <button
+            type="button"
+            className="ai-action-button ai-action-button--small"
+            disabled={aiBusy}
+            onClick={() =>
+              requestAI("caveat_draft", {}, (result) =>
+                setCaveats((current) => [
+                  ...new Set([...current, ...result.caveats]),
+                ]),
+              )
+            }
+          >
+            Draft caveats
+          </button>
+          <button
+            type="button"
+            className="ai-action-button ai-action-button--secondary ai-action-button--small"
+            disabled={aiBusy}
+            onClick={() =>
+              requestAI("assumption_review", {}, (result) =>
+                setCaveats((current) => [
+                  ...new Set([
+                    ...current,
+                    ...result.findings
+                      .map((finding) => finding.suggestedCaveat)
+                      .filter(Boolean),
+                  ]),
+                ]),
+              )
+            }
+          >
+            Review assumptions
+          </button>
+        </div>
+      </div>
       <div
         style={{
           fontSize: 12,
@@ -5590,6 +6000,47 @@ export default function App() {
     );
     return (
       <div>
+        <div className="ai-workflow-card ai-workflow-card--compact">
+          <div className="ai-section-heading">
+            <div>
+              <span className="ai-eyebrow">Optional AI review</span>
+              <h2>Client narrative & quality check</h2>
+              <p>
+                Draft a client-facing explanation or inspect the completed
+                budget for inconsistencies.
+              </p>
+            </div>
+            <div>
+              <button
+                type="button"
+                className="ai-action-button ai-action-button--small"
+                disabled={aiBusy}
+                onClick={() =>
+                  requestAI("budget_narrative", {}, (result) =>
+                    setClientNarrative(result.narrative),
+                  )
+                }
+              >
+                Draft narrative
+              </button>
+              <button
+                type="button"
+                className="ai-action-button ai-action-button--secondary ai-action-button--small"
+                disabled={aiBusy}
+                onClick={() => requestAI("integrity_review", {}, () => {})}
+              >
+                Review budget
+              </button>
+            </div>
+          </div>
+          <textarea
+            aria-label="Client-facing budget narrative"
+            value={clientNarrative}
+            onChange={(event) => setClientNarrative(event.target.value)}
+            rows={5}
+            placeholder="The accepted AI narrative remains editable and is saved with this draft."
+          />
+        </div>
         <div style={s.card}>
           <div style={s.sectionTitle}>Export Readiness</div>
           {readinessIssues.length === 0 ? (
@@ -6451,122 +6902,185 @@ export default function App() {
       />
     );
 
-  return (
-    <div className="app-shell" style={s.wrap}>
-      <header className="app-header" style={s.header}>
-        <div>
-          <div style={s.headerTitle}>
-            {mode === "corporate"
-              ? "Corporate Budget Builder"
-              : mode === "tax"
-                ? "Tax Budget Builder"
-                : "Litigation Budget Builder"}
-          </div>
-          <div style={s.headerSub}>
-            {matter.client ||
-              matter.name ||
-              (mode === "corporate"
-                ? "New deal"
-                : mode === "tax"
-                  ? "New matter"
-                  : "New matter")}
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-          <div
-            style={{ fontSize: 12, fontFamily: "sans-serif", color: "#8a9cbf" }}
-          >
-            {matter.type ? modeLabels[matter.type] : ""}
-          </div>
-          <button
-            onClick={returnToLanding}
-            style={{
-              fontSize: 11,
-              fontFamily: "sans-serif",
-              color: "#fff",
-              background: ACCENT,
-              border: "none",
-              borderRadius: 3,
-              padding: "6px 14px",
-              cursor: "pointer",
-              letterSpacing: "0.05em",
-              fontWeight: 600,
-            }}
-          >
-            ← Change type
-          </button>
-        </div>
-      </header>
-
-      <nav className="app-steps" style={s.steps} aria-label="Budget steps">
-        {STEPS.map((label, i) => {
-          const n = i + 1;
-          return (
-            <button
-              type="button"
-              key={n}
-              style={s.stepItem(step === n, step > n)}
-              onClick={() => setStep(n)}
-              aria-current={step === n ? "step" : undefined}
-            >
-              {n}. {label}
-            </button>
-          );
-        })}
-      </nav>
-
-      {storageMessage && (
-        <div
-          role="alert"
-          style={{
-            maxWidth: 820,
-            margin: "20px auto 0",
-            padding: "12px 16px",
-            background: "#fff7ed",
-            border: "1px solid #d9a45f",
-            borderRadius: 4,
-            fontSize: 13,
-            fontFamily: "sans-serif",
-            color: "#6f3d0a",
-          }}
-        >
-          {storageMessage}
-        </div>
-      )}
-
-      <main className="app-body" style={s.body}>
-        {stepComponents[step] && stepComponents[step]()}
-      </main>
-
-      <footer className="app-nav" style={s.nav}>
-        <button
-          style={s.btn(false)}
-          onClick={() => setStep((st) => Math.max(1, st - 1))}
-          disabled={step === 1}
-        >
-          ← Back
-        </button>
-        <span
-          style={{
-            fontSize: 11,
-            fontFamily: "sans-serif",
-            color: MUTED,
-            letterSpacing: "0.06em",
-          }}
-        >
+  const activeStageId =
+    step === 1
+      ? "brief"
+      : step === 2
+        ? "scope"
+        : step <= 4
+          ? "estimate"
+          : "review";
+  const readinessIssues = reviewBudget({ matter, phases, timekeepers });
+  const budgetTotals = totals();
+  const workspaceStages = [
+    { id: "brief", label: "Brief", status: step > 1 ? "complete" : "upcoming" },
+    { id: "scope", label: "Scope", status: step > 2 ? "complete" : "upcoming" },
+    {
+      id: "estimate",
+      label: "Estimate",
+      status: step > 4 ? "complete" : "upcoming",
+    },
+    {
+      id: "review",
+      label: "Review & Export",
+      status: readinessIssues.length
+        ? "issues"
+        : step === 6
+          ? "complete"
+          : "upcoming",
+      issueCount: readinessIssues.length,
+    },
+  ];
+  const stageStart = { brief: 1, scope: 2, estimate: 3, review: 5 };
+  const stageCopy = {
+    brief: [
+      "Matter brief",
+      "Define the engagement and the information needed to build a useful estimate.",
+    ],
+    scope: [
+      "Scope of work",
+      "Choose the phases and tasks that belong in this budget.",
+    ],
+    estimate: [
+      step === 3 ? "Build the estimate" : "Choose the fee structure",
+      step === 3
+        ? "Enter direct ranges or calculate from timekeeper hours and rates."
+        : "Set how this estimate will be presented and priced.",
+    ],
+    review: [
+      step === 5 ? "Assumptions & exclusions" : "Review & export",
+      step === 5
+        ? "Make the budget boundaries clear before presenting it."
+        : "Resolve issues, inspect client and internal views, and create the workbook.",
+    ],
+  };
+  const footer = (
+    <div className="workspace-step-footer">
+      <button
+        className="workspace-header-button"
+        onClick={() => setStep((current) => Math.max(1, current - 1))}
+        disabled={step === 1}
+      >
+        ← Back
+      </button>
+      <span>
+        <span>
           Step {step} of {STEPS.length}
         </span>
-        {step < STEPS.length ? (
-          <button
-            style={s.btn(true)}
-            onClick={() => setStep((st) => Math.min(STEPS.length, st + 1))}
-          >
-            Next →
-          </button>
-        ) : (
-          <div style={{ width: 80 }}></div>
-        )}
-      </footer>
+        <span> · {STEPS[step - 1]}</span>
+      </span>
+      {step < STEPS.length ? (
+        <button
+          className="workspace-header-button workspace-header-button--primary"
+          onClick={() =>
+            setStep((current) => Math.min(STEPS.length, current + 1))
+          }
+        >
+          Next →
+        </button>
+      ) : (
+        <span />
+      )}
     </div>
+  );
+
+  return (
+    <>
+      <WorkspaceShell
+        productName={
+          mode === "corporate"
+            ? "Corporate Budget Builder"
+            : mode === "tax"
+              ? "Tax Budget Builder"
+              : "Litigation Budget Builder"
+        }
+        eyebrow={matter.type ? modeLabels[matter.type] : "New budget"}
+        title={stageCopy[activeStageId][0]}
+        description={stageCopy[activeStageId][1]}
+        stages={workspaceStages}
+        activeStageId={activeStageId}
+        onStageChange={(stageId) => setStep(stageStart[stageId])}
+        summary={{
+          saveStatus: persistenceEnabled
+            ? "Saved on this device"
+            : "Session not saved",
+          saveTone: persistenceEnabled ? "success" : "warning",
+          lowTotal: budgetTotals.low,
+          highTotal: budgetTotals.high,
+          feeType: FEE_TYPES.find((item) => item.v === feeType)?.l || feeType,
+          issueCount: readinessIssues.length,
+          onReviewIssues: () => setStep(6),
+        }}
+        headerActions={
+          <>
+            <button
+              type="button"
+              className="workspace-header-button"
+              onClick={() => setSettingsOpen(true)}
+            >
+              AI settings
+            </button>
+            <button
+              type="button"
+              className="workspace-header-button"
+              onClick={returnToLanding}
+            >
+              Change budget type
+            </button>
+          </>
+        }
+        footer={footer}
+      >
+        {storageMessage && (
+          <div role="alert" className="workspace-alert">
+            {storageMessage}
+          </div>
+        )}
+        {aiError && (
+          <div role="alert" className="workspace-alert workspace-alert--ai">
+            <strong>AI:</strong> {aiError}{" "}
+            <button type="button" onClick={() => setSettingsOpen(true)}>
+              Open settings
+            </button>
+          </div>
+        )}
+        {aiBusy && (
+          <div role="status" className="workspace-ai-status">
+            Generating a reviewable suggestion…
+          </div>
+        )}
+        <div className="app-body workspace-legacy-content">
+          {stepComponents[step] && stepComponents[step]()}
+        </div>
+      </WorkspaceShell>
+      <AISettings
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        routing={aiRouting}
+        onRoutingChange={setAIRouting}
+      />
+      <DataPreviewDialog
+        open={Boolean(aiPending)}
+        provider={aiPending?.route.provider}
+        model={aiPending?.route.model}
+        payload={aiPending?.payload}
+        onClose={() => setAIPending(null)}
+        onConfirm={runPendingAI}
+      />
+      <SuggestionDialog
+        open={Boolean(aiSuggestion)}
+        title={
+          aiSuggestion
+            ? `Review: ${WORKFLOWS[aiSuggestion.workflowId].label}`
+            : undefined
+        }
+        result={aiSuggestion?.result}
+        onDismiss={() => setAISuggestion(null)}
+        onApply={() => {
+          aiSuggestion?.apply(aiSuggestion.result);
+          setAISuggestion(null);
+        }}
+      />
+    </>
   );
 }

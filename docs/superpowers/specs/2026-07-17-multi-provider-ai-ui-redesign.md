@@ -65,16 +65,16 @@ The stage rail shows completion and issue states. A persistent summary rail show
 
 Every workflow has a stable ID, display name, input builder, redaction policy, JSON Schema, output validator, and preview renderer.
 
-| Workflow | Restored/new | Input | Proposed result |
-| --- | --- | --- | --- |
-| `scope_draft` | Restored and expanded | Anonymized scope, matter type, jurisdiction, duration | Phases, tasks, optional initial ranges |
-| `task_estimate` | Restored | One task, matter context, staffing/rates | Low/high estimate and rationale |
-| `all_task_estimates` | Restored | All tasks, matter context, staffing/rates | Per-task low/high estimates and rationales |
-| `caveat_draft` | Restored | Budget structure and non-identifying assumptions | Suggested caveats |
-| `budget_narrative` | Restored | Matter type, totals, fee type, phases, caveats | Client-facing summary |
-| `assumption_review` | New | Scope, estimates, caveats, fee structure | Missing assumptions, exclusions, and scope risks |
-| `integrity_review` | New | Completed non-identifying budget | Inconsistencies, outliers, and unresolved issues |
-| `change_plan` | New | Anonymized instruction plus current phase/task structure | Structured adds, edits, moves, or removals |
+| Workflow             | Restored/new          | Input                                                    | Proposed result                                  |
+| -------------------- | --------------------- | -------------------------------------------------------- | ------------------------------------------------ |
+| `scope_draft`        | Restored and expanded | Anonymized scope, matter type, jurisdiction, duration    | Phases, tasks, optional initial ranges           |
+| `task_estimate`      | Restored              | One task, matter context, staffing/rates                 | Low/high estimate and rationale                  |
+| `all_task_estimates` | Restored              | All tasks, matter context, staffing/rates                | Per-task low/high estimates and rationales       |
+| `caveat_draft`       | Restored              | Budget structure and non-identifying assumptions         | Suggested caveats                                |
+| `budget_narrative`   | Restored              | Matter type, totals, fee type, phases, caveats           | Client-facing summary                            |
+| `assumption_review`  | New                   | Scope, estimates, caveats, fee structure                 | Missing assumptions, exclusions, and scope risks |
+| `integrity_review`   | New                   | Completed non-identifying budget                         | Inconsistencies, outliers, and unresolved issues |
+| `change_plan`        | New                   | Anonymized instruction plus current phase/task structure | Structured adds, edits, moves, or removals       |
 
 Natural-language changes are plans, not commands. A preview lists each proposed operation; users can select operations and apply them together. Destructive proposals require explicit selection and never bypass existing confirmation behavior.
 

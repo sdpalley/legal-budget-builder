@@ -22,7 +22,8 @@ async function requestJson(fetchImpl, url, options) {
   try {
     response = await fetchImpl(url, options);
   } catch (error) {
-    if (error?.name === "AbortError") throw new ProviderError("timeout", "The AI request timed out.");
+    if (error?.name === "AbortError")
+      throw new ProviderError("timeout", "The AI request timed out.");
     throw new ProviderError("network", "The AI provider could not be reached.");
   }
   if (!response.ok) {
@@ -34,23 +35,35 @@ async function requestJson(fetchImpl, url, options) {
   }
   const declaredLength = Number(response.headers?.get?.("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > 2_000_000) {
-    throw new ProviderError("response_too_large", "The AI provider response was too large.");
+    throw new ProviderError(
+      "response_too_large",
+      "The AI provider response was too large.",
+    );
   }
   try {
     return await response.json();
   } catch {
-    throw new ProviderError("invalid_response", "The AI provider returned unreadable data.");
+    throw new ProviderError(
+      "invalid_response",
+      "The AI provider returned unreadable data.",
+    );
   }
 }
 
 function parseJsonText(text) {
   if (typeof text !== "string" || !text.trim()) {
-    throw new ProviderError("invalid_response", "The AI provider returned no structured result.");
+    throw new ProviderError(
+      "invalid_response",
+      "The AI provider returned no structured result.",
+    );
   }
   try {
     return JSON.parse(text);
   } catch {
-    throw new ProviderError("invalid_response", "The AI provider returned invalid structured data.");
+    throw new ProviderError(
+      "invalid_response",
+      "The AI provider returned invalid structured data.",
+    );
   }
 }
 
@@ -65,4 +78,3 @@ function promptMessages(system, payload) {
 }
 
 module.exports = { ProviderError, parseJsonText, promptMessages, requestJson };
-

@@ -8,7 +8,8 @@ The application is a local single-user budgeting aid, not legal advice, billing 
 
 - Draft data is stored in the current browser/Electron profile under the local-storage key `lb_session`.
 - There is no application server, account system, cloud sync, or remote database.
-- The budgeting workflow does not transmit matter data to an AI or application service.
+- Manual budgeting, calculation, preview, and export do not transmit matter data. Optional AI workflows send the exact anonymized payload shown in the privacy preview to the provider/model the user selects.
+- API keys are stored only by the desktop app as operating-system-encrypted blobs. They are never stored in the budget draft or Excel export and are never returned to the React renderer.
 - Treat the app as a demonstration tool and use anonymized/sample data unless your organization has reviewed the local-device storage model.
 - Excel export uses a pinned, locally bundled workbook library loaded on demand. Export does not require network access.
 
@@ -35,6 +36,19 @@ npm run electron
 ```
 
 The Electron command runs the production web build first, then opens `dist/index.html` in an isolated renderer.
+
+## Optional AI setup
+
+1. Launch the desktop app with `npm run electron`.
+2. Open **AI settings** in the workspace header.
+3. Add an API key for OpenAI, Anthropic Claude, or OpenRouter. The app never displays a saved key again.
+4. Test the connection and refresh the provider's current model list.
+5. Choose a default provider/model under **Workflow routing**, then override individual tasks if desired.
+6. Use the contextual AI controls in Brief, Scope, Estimate, and Review. Inspect the outgoing JSON and destination before sending, then review and explicitly apply or dismiss the result.
+
+The Vite browser-development view can hold a key only in memory for the current tab and does not make provider requests. This prevents production keys from being exposed to page code. Use Electron for real AI workflows. Client name and matter name are excluded from every built-in AI payload; the scope generator uses its own explicitly anonymized input.
+
+Available workflows are phase/task drafting, one-task and all-task estimates, caveat drafting, client narrative drafting, assumption review, completed-budget integrity review, and natural-language scope change planning. AI remains entirely optional: all manual features work with no key and while offline.
 
 ## Quality checks
 
@@ -74,8 +88,12 @@ The tag-triggered GitHub Actions release workflow runs format, lint, tests/cover
 
 ```text
 electron/main.cjs       Electron window lifecycle and navigation boundary
+electron/preload.cjs    Narrow credential/model/workflow bridge
+electron/llm/           Encrypted credential store, providers, IPC, and AI service
 src/main.jsx            React entry point
-src/App.jsx             Current product UI, state, catalogs, calculations, and export
+src/ai/                 Redacted workflow contracts, result validation, and routing
+src/components/         Counsel Workspace, AI dialogs, and provider settings
+src/App.jsx             Product state, catalogs, contextual workflow integration, and export
 src/App.test.jsx        Characterization/integration safety net
 vite.config.js          Browser build and Vitest/coverage configuration
 ```
@@ -87,6 +105,7 @@ The approved overhaul extracts only proven boundaries—domain/calculation code,
 - `agent-reports/02-proposals.md`
 - `agent-reports/03-plan.md`
 - `docs/superpowers/specs/2026-07-17-overhaul-design.md`
+- `docs/superpowers/specs/2026-07-17-multi-provider-ai-ui-redesign.md`
 
 ## Release checklist
 

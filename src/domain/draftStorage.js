@@ -97,6 +97,7 @@ const normalizeTask = (task) => {
     selected: toBoolean(task.selected, true),
     low: toOptionalNumber(task.low),
     high: toOptionalNumber(task.high),
+    aiRationale: toString(task.aiRationale),
     tkBreakdown,
   };
 };
@@ -221,6 +222,8 @@ export function normalizeDraft(raw) {
       contingency: toNumber(raw.contingency, 100000),
       feeType: FEE_TYPES.has(raw.feeType) ? raw.feeType : "hourly",
       caveats: (raw.caveats ?? []).map((caveat) => toString(caveat)),
+      aiScope: toString(raw.aiScope),
+      clientNarrative: toString(raw.clientNarrative),
       timelineMode: raw.timelineMode === "manual" ? "manual" : "auto",
       phaseTimeline: normalizeTimeline(raw.phaseTimeline ?? {}),
     };

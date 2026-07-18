@@ -22,7 +22,8 @@ export function normalizeRouting(value = {}) {
     default: {
       provider: defaultProvider,
       model:
-        typeof requestedDefault.model === "string" && requestedDefault.model.trim()
+        typeof requestedDefault.model === "string" &&
+        requestedDefault.model.trim()
           ? requestedDefault.model.trim()
           : PROVIDERS[defaultProvider].seedModel,
     },
@@ -31,7 +32,9 @@ export function normalizeRouting(value = {}) {
   for (const workflowId of WORKFLOW_IDS) {
     const route = value.workflows?.[workflowId];
     if (!route || route.inherit !== false) continue;
-    const provider = validProvider(route.provider) ? route.provider : defaultProvider;
+    const provider = validProvider(route.provider)
+      ? route.provider
+      : defaultProvider;
     normalized.workflows[workflowId] = {
       inherit: false,
       provider,
@@ -45,8 +48,8 @@ export function normalizeRouting(value = {}) {
 }
 
 export function resolveRoute(workflowId, routing) {
-  if (!WORKFLOW_IDS.includes(workflowId)) throw new Error(`Unknown AI workflow: ${workflowId}`);
+  if (!WORKFLOW_IDS.includes(workflowId))
+    throw new Error(`Unknown AI workflow: ${workflowId}`);
   const normalized = normalizeRouting(routing);
   return normalized.workflows[workflowId] || normalized.default;
 }
-

@@ -16,11 +16,15 @@ function createCredentialStore({
   fsPromises,
   platform = process.platform,
 }) {
-  if (!safeStorage || !filePath || !fsPromises) throw new Error("Credential store dependencies are required.");
+  if (!safeStorage || !filePath || !fsPromises)
+    throw new Error("Credential store dependencies are required.");
 
   function assertProvider(provider) {
     if (!PROVIDERS.has(provider)) {
-      throw new CredentialStoreError("invalid_provider", "That AI provider is not supported.");
+      throw new CredentialStoreError(
+        "invalid_provider",
+        "That AI provider is not supported.",
+      );
     }
   }
 
@@ -47,15 +51,24 @@ function createCredentialStore({
     try {
       const contents = await fsPromises.readFile(filePath, "utf8");
       const parsed = JSON.parse(contents);
-      return parsed && parsed.version === 1 && parsed.credentials && typeof parsed.credentials === "object"
+      return parsed &&
+        parsed.version === 1 &&
+        parsed.credentials &&
+        typeof parsed.credentials === "object"
         ? parsed
         : { version: 1, credentials: {} };
     } catch (error) {
       if (error?.code === "ENOENT") return { version: 1, credentials: {} };
       if (error instanceof SyntaxError) {
-        throw new CredentialStoreError("credential_store_corrupt", "The encrypted credential store is unreadable.");
+        throw new CredentialStoreError(
+          "credential_store_corrupt",
+          "The encrypted credential store is unreadable.",
+        );
       }
-      throw new CredentialStoreError("credential_store_read_failed", "The encrypted credential store could not be read.");
+      throw new CredentialStoreError(
+        "credential_store_read_failed",
+        "The encrypted credential store could not be read.",
+      );
     }
   }
 
@@ -64,35 +77,56 @@ function createCredentialStore({
     const temporaryPath = `${filePath}.tmp`;
     try {
       await fsPromises.mkdir(directory, { recursive: true, mode: 0o700 });
-      await fsPromises.writeFile(temporaryPath, `${JSON.stringify(data)}\n`, { encoding: "utf8", mode: 0o600 });
+      await fsPromises.writeFile(temporaryPath, `${JSON.stringify(data)}\n`, {
+        encoding: "utf8",
+        mode: 0o600,
+      });
       await fsPromises.rename(temporaryPath, filePath);
-      if (typeof fsPromises.chmod === "function") await fsPromises.chmod(filePath, 0o600);
+      if (typeof fsPromises.chmod === "function")
+        await fsPromises.chmod(filePath, 0o600);
     } catch {
-      throw new CredentialStoreError("credential_store_write_failed", "The encrypted credential store could not be updated.");
+      throw new CredentialStoreError(
+        "credential_store_write_failed",
+        "The encrypted credential store could not be updated.",
+      );
     }
   }
 
   async function encrypt(value) {
-    if (typeof safeStorage.encryptStringAsync === "function") return safeStorage.encryptStringAsync(value);
+    if (typeof safeStorage.encryptStringAsync === "function")
+      return safeStorage.encryptStringAsync(value);
     return safeStorage.encryptString(value);
   }
 
   async function decrypt(value) {
-    if (typeof safeStorage.decryptStringAsync === "function") return safeStorage.decryptStringAsync(value);
+    if (typeof safeStorage.decryptStringAsync === "function")
+      return safeStorage.decryptStringAsync(value);
     return safeStorage.decryptString(value);
   }
 
   return {
     async status() {
       const data = await readFile();
-      return Object.fromEntries([...PROVIDERS].map((provider) => [provider, Boolean(data.credentials[provider])]));
+      return Object.fromEntries(
+        [...PROVIDERS].map((provider) => [
+          provider,
+          Boolean(data.credentials[provider]),
+        ]),
+      );
     },
 
     async set(provider, credential) {
       assertProvider(provider);
       assertSecureStorage();
-      if (typeof credential !== "string" || credential.trim().length < 8 || credential.length > 10000) {
-        throw new CredentialStoreError("invalid_credential", "Enter a valid API key.");
+      if (
+        typeof credential !== "string" ||
+        credential.trim().length < 8 ||
+        credential.length > 10000
+      ) {
+        throw new CredentialStoreError(
+          "invalid_credential",
+          "Enter a valid API key.",
+        );
       }
       const data = await readFile();
       const encrypted = await encrypt(credential.trim());
@@ -107,12 +141,18 @@ function createCredentialStore({
       const data = await readFile();
       const encoded = data.credentials[provider];
       if (!encoded) {
-        throw new CredentialStoreError("missing_credential", "Configure an API key for this provider first.");
+        throw new CredentialStoreError(
+          "missing_credential",
+          "Configure an API key for this provider first.",
+        );
       }
       try {
         return await decrypt(Buffer.from(encoded, "base64"));
       } catch {
-        throw new CredentialStoreError("credential_decrypt_failed", "The saved API key could not be decrypted.");
+        throw new CredentialStoreError(
+          "credential_decrypt_failed",
+          "The saved API key could not be decrypted.",
+        );
       }
     },
 
@@ -127,4 +167,3 @@ function createCredentialStore({
 }
 
 module.exports = { CredentialStoreError, createCredentialStore };
-

@@ -75,7 +75,7 @@ describe("inferModeFromMatterType", () => {
 });
 
 describe("normalizeDraft", () => {
-  it("migrates a legacy draft, coerces values, and strips unknown AI fields", () => {
+  it("migrates a legacy draft, coerces values, and preserves accepted AI content", () => {
     const draft = normalizeDraft(makeDraft());
 
     expect(draft).toMatchObject({
@@ -100,7 +100,10 @@ describe("normalizeDraft", () => {
     expect(draft.savedAt).toEqual(expect.any(Number));
     expect(draft).not.toHaveProperty("summary");
     expect(draft).not.toHaveProperty("aiLoading");
-    expect(draft.phases[0].tasks[0]).not.toHaveProperty("aiRationale");
+    expect(draft.phases[0].tasks[0]).toHaveProperty(
+      "aiRationale",
+      "legacy AI text",
+    );
     expect(draft.phases[0].tasks[0].tkBreakdown[0]).not.toHaveProperty("extra");
   });
 

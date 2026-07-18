@@ -1,9 +1,14 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, safeStorage, shell } = require("electron");
 const path = require("path");
 const {
   isSafeExternalUrl,
   isSameDocumentNavigation,
 } = require("./navigation.cjs");
+const { createCredentialStore } = require("./llm/credentialStore.cjs");
+const { registerAIHandlers } = require("./llm/ipc.cjs");
+const { createLLMService } = require("./llm/service.cjs");
+
+let disposeAIHandlers;
 
 function openExternalIfSafe(url) {
   if (isSafeExternalUrl(url)) void shell.openExternal(url);
@@ -18,6 +23,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
+      preload: path.join(__dirname, "preload.cjs"),
     },
     title: "Legal Budget Builder",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
@@ -39,6 +46,17 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  const credentialStore = createCredentialStore({
+    safeStorage,
+    filePath: path.join(app.getPath("userData"), "llm-credentials.json"),
+    fsPromises: require("fs").promises,
+  });
+  const llmService = createLLMService({ credentialStore });
+  disposeAIHandlers = registerAIHandlers({
+    ipcMain,
+    credentialStore,
+    llmService,
+  });
   createWindow();
 
   app.on("activate", () => {
@@ -48,4 +66,11 @@ app.whenReady().then(() => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  if (disposeAIHandlers) {
+    disposeAIHandlers();
+    disposeAIHandlers = undefined;
+  }
 });
