@@ -30,6 +30,28 @@ async function enterLitigationWizard(user) {
   await user.click(screen.getByRole("button", { name: "Continue →" }));
 }
 
+function createDraft(overrides = {}) {
+  return {
+    mode: "litigation",
+    matter: { name: "Draft export", type: "arbitration" },
+    phases: buildPhases("arbitration", "litigation"),
+    timekeepers: [],
+    contingency: 100000,
+    feeType: "hourly",
+    caveats: [],
+    ...overrides,
+  };
+}
+
+async function openDraftReview(user, draft) {
+  localStorage.setItem("lb_session", JSON.stringify(draft));
+  render(<App />);
+  await user.click(screen.getByRole("button", { name: "Resume draft" }));
+  await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
+  await user.click(screen.getByRole("button", { name: "Continue →" }));
+  await user.click(screen.getByRole("button", { name: /^\d+ issues?$/ }));
+}
+
 describe("phase catalog helpers", () => {
   it("parses common duration formats and uses a stable fallback", () => {
     expect(parseDurationMonths("18-24 months")).toBe(21);
@@ -320,6 +342,17 @@ describe("primary wizard workflow", () => {
       screen.getByRole("button", { name: "Retry Excel Export" }),
     ).toBeEnabled();
     expect(consoleError).toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole("button", { name: "Retry Excel Export" }),
+    );
+
+    await waitFor(() => {
+      expect(workbookMocks.writeFile).toHaveBeenCalledTimes(2);
+    });
+    expect(
+      await screen.findByText("Excel budget created successfully."),
+    ).toBeInTheDocument();
   });
 
   it("exports an incomplete draft and links review notes to their source", async () => {
@@ -330,7 +363,9 @@ describe("primary wizard workflow", () => {
       await user.click(screen.getByRole("button", { name: "Next →" }));
     }
 
-    expect(screen.getByRole("button", { name: "↓ Download Excel" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "↓ Download Excel" }),
+    ).toBeEnabled();
     expect(
       screen.getByText(/Add a non-zero estimate to at least one selected task/),
     ).toBeInTheDocument();
@@ -346,4 +381,101 @@ describe("primary wizard workflow", () => {
     );
     expect(screen.getByText("Cost Ranges")).toBeInTheDocument();
   });
+
+  it.each([
+    {
+      name: "an unnamed matter",
+      expectedNote: "Add a matter or client name",
+      expectedFilename: "budget_budget.xlsx",
+      draft: () => createDraft({ matter: { name: "", type: "arbitration" } }),
+    },
+    {
+      name: "an unnamed timekeeper",
+      expectedNote: "Name the Partner used in this budget",
+      draft: () =>
+        createDraft({
+          timekeepers: [
+            { id: "partner", name: "", title: "Partner", rate: 900 },
+          ],
+        }),
+    },
+    {
+      name: "no selected work",
+      expectedNote: "Select at least one task",
+      draft: () =>
+        createDraft({
+          phases: buildPhases("arbitration", "litigation").map((phase) => ({
+            ...phase,
+            selected: false,
+          })),
+        }),
+    },
+    {
+      name: "an inverted direct-cost range",
+      expectedNote: "low estimate greater than its high estimate",
+      draft: () => {
+        const phases = buildPhases("arbitration", "litigation");
+        phases[0].tasks[0] = { ...phases[0].tasks[0], low: 2000, high: 1000 };
+        return createDraft({ phases });
+      },
+    },
+    {
+      name: "a missing timekeeper rate",
+      expectedNote: "without a billing rate",
+      draft: () => {
+        const phases = buildPhases("arbitration", "litigation");
+        phases[0].tasks[0] = {
+          ...phases[0].tasks[0],
+          tkBreakdown: [{ tkId: "partner", hoursLow: 1, hoursHigh: 2 }],
+        };
+        return createDraft({
+          phases,
+          timekeepers: [
+            { id: "partner", name: "Pat", title: "Partner", rate: "" },
+          ],
+        });
+      },
+    },
+    {
+      name: "an inverted timekeeper-hours range",
+      expectedNote: "low hours greater than high hours",
+      draft: () => {
+        const phases = buildPhases("arbitration", "litigation");
+        phases[0].tasks[0] = {
+          ...phases[0].tasks[0],
+          tkBreakdown: [{ tkId: "partner", hoursLow: 2, hoursHigh: 1 }],
+        };
+        return createDraft({
+          phases,
+          timekeepers: [
+            { id: "partner", name: "Pat", title: "Partner", rate: 900 },
+          ],
+        });
+      },
+    },
+  ])(
+    "exports a draft with $name",
+    async ({
+      expectedFilename = "Draft_export_budget.xlsx",
+      expectedNote,
+      draft,
+    }) => {
+      const user = userEvent.setup();
+      await openDraftReview(user, draft());
+
+      expect(
+        screen.getByText(expectedNote, { exact: false }),
+      ).toBeInTheDocument();
+      await user.click(
+        screen.getByRole("button", { name: "↓ Download Excel" }),
+      );
+
+      await waitFor(() => {
+        expect(workbookMocks.writeFile).toHaveBeenCalledWith(
+          expect.any(Object),
+          expectedFilename,
+        );
+      });
+    },
+  );
 });
