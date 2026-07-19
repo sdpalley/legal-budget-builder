@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -23,8 +23,8 @@ vi.mock("xlsx-js-style", () => ({
 const ACKNOWLEDGEMENT =
   "I understand that drafts are stored locally on this device and I will only enter anonymized or sample data.";
 
-async function enterLitigationWizard(user) {
-  render(<App />);
+async function enterLitigationWizard(user, appProps) {
+  render(<App {...appProps} />);
   await user.click(screen.getByText("Litigation & Dispute Resolution"));
   await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
   await user.click(screen.getByRole("button", { name: "Continue →" }));
@@ -314,6 +314,80 @@ describe("primary wizard workflow", () => {
     expect(
       screen.getByText("Excel budget created successfully."),
     ).toHaveTextContent("Excel budget created successfully.");
+  });
+
+  it("does not carry export success into a replacement budget", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    await enterLitigationWizard(user);
+
+    for (let step = 1; step < 6; step += 1) {
+      await user.click(screen.getByRole("button", { name: "Next →" }));
+    }
+    await user.click(screen.getByRole("button", { name: "↓ Download Excel" }));
+    expect(
+      await screen.findByText("Excel budget created successfully."),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Change budget type" }),
+    );
+    await user.click(screen.getByText("Corporate & Transactional"));
+    expect(confirm).toHaveBeenCalled();
+    await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
+    await user.click(screen.getByRole("button", { name: "Continue →" }));
+    for (let step = 1; step < 6; step += 1) {
+      await user.click(screen.getByRole("button", { name: "Next →" }));
+    }
+
+    expect(
+      screen.queryByText("Excel budget created successfully."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "↓ Download Excel" }),
+    ).toBeEnabled();
+  });
+
+  it("ignores an export that finishes after a replacement budget begins", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let resolveWorkbook;
+    const loadWorkbook = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveWorkbook = resolve;
+        }),
+    );
+    await enterLitigationWizard(user, { loadWorkbook });
+
+    for (let step = 1; step < 6; step += 1) {
+      await user.click(screen.getByRole("button", { name: "Next →" }));
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "↓ Download Excel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change budget type" }));
+    fireEvent.click(screen.getByText("Corporate & Transactional"));
+    fireEvent.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }));
+    for (let step = 1; step < 6; step += 1) {
+      fireEvent.click(screen.getByRole("button", { name: "Next →" }));
+    }
+    resolveWorkbook({
+      default: {
+        utils: {
+          book_append_sheet: workbookMocks.bookAppendSheet,
+          book_new: workbookMocks.bookNew,
+        },
+        writeFile: workbookMocks.writeFile,
+      },
+    });
+
+    await Promise.resolve();
+    expect(workbookMocks.bookNew).not.toHaveBeenCalled();
+    expect(workbookMocks.writeFile).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("Excel budget created successfully."),
+    ).not.toBeInTheDocument();
   });
 
   it("shows a recoverable error when Excel writing fails", async () => {
