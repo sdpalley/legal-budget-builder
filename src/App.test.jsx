@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -23,11 +23,33 @@ vi.mock("xlsx-js-style", () => ({
 const ACKNOWLEDGEMENT =
   "I understand that drafts are stored locally on this device and I will only enter anonymized or sample data.";
 
-async function enterLitigationWizard(user) {
-  render(<App />);
+async function enterLitigationWizard(user, appProps) {
+  render(<App {...appProps} />);
   await user.click(screen.getByText("Litigation & Dispute Resolution"));
   await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
   await user.click(screen.getByRole("button", { name: "Continue →" }));
+}
+
+function createDraft(overrides = {}) {
+  return {
+    mode: "litigation",
+    matter: { name: "Draft export", type: "arbitration" },
+    phases: buildPhases("arbitration", "litigation"),
+    timekeepers: [],
+    contingency: 100000,
+    feeType: "hourly",
+    caveats: [],
+    ...overrides,
+  };
+}
+
+async function openDraftReview(user, draft) {
+  localStorage.setItem("lb_session", JSON.stringify(draft));
+  render(<App />);
+  await user.click(screen.getByRole("button", { name: "Resume draft" }));
+  await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
+  await user.click(screen.getByRole("button", { name: "Continue →" }));
+  await user.click(screen.getByRole("button", { name: /^\d+ issues?$/ }));
 }
 
 describe("phase catalog helpers", () => {
@@ -294,6 +316,80 @@ describe("primary wizard workflow", () => {
     ).toHaveTextContent("Excel budget created successfully.");
   });
 
+  it("does not carry export success into a replacement budget", async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    await enterLitigationWizard(user);
+
+    for (let step = 1; step < 6; step += 1) {
+      await user.click(screen.getByRole("button", { name: "Next →" }));
+    }
+    await user.click(screen.getByRole("button", { name: "↓ Download Excel" }));
+    expect(
+      await screen.findByText("Excel budget created successfully."),
+    ).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "Change budget type" }),
+    );
+    await user.click(screen.getByText("Corporate & Transactional"));
+    expect(confirm).toHaveBeenCalled();
+    await user.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
+    await user.click(screen.getByRole("button", { name: "Continue →" }));
+    for (let step = 1; step < 6; step += 1) {
+      await user.click(screen.getByRole("button", { name: "Next →" }));
+    }
+
+    expect(
+      screen.queryByText("Excel budget created successfully."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "↓ Download Excel" }),
+    ).toBeEnabled();
+  });
+
+  it("ignores an export that finishes after a replacement budget begins", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    let resolveWorkbook;
+    const loadWorkbook = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveWorkbook = resolve;
+        }),
+    );
+    await enterLitigationWizard(user, { loadWorkbook });
+
+    for (let step = 1; step < 6; step += 1) {
+      await user.click(screen.getByRole("button", { name: "Next →" }));
+    }
+
+    fireEvent.click(screen.getByRole("button", { name: "↓ Download Excel" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change budget type" }));
+    fireEvent.click(screen.getByText("Corporate & Transactional"));
+    fireEvent.click(screen.getByRole("checkbox", { name: ACKNOWLEDGEMENT }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue →" }));
+    for (let step = 1; step < 6; step += 1) {
+      fireEvent.click(screen.getByRole("button", { name: "Next →" }));
+    }
+    resolveWorkbook({
+      default: {
+        utils: {
+          book_append_sheet: workbookMocks.bookAppendSheet,
+          book_new: workbookMocks.bookNew,
+        },
+        writeFile: workbookMocks.writeFile,
+      },
+    });
+
+    await Promise.resolve();
+    expect(workbookMocks.bookNew).not.toHaveBeenCalled();
+    expect(workbookMocks.writeFile).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("Excel budget created successfully."),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows a recoverable error when Excel writing fails", async () => {
     const user = userEvent.setup();
     const consoleError = vi
@@ -320,9 +416,20 @@ describe("primary wizard workflow", () => {
       screen.getByRole("button", { name: "Retry Excel Export" }),
     ).toBeEnabled();
     expect(consoleError).toHaveBeenCalled();
+
+    await user.click(
+      screen.getByRole("button", { name: "Retry Excel Export" }),
+    );
+
+    await waitFor(() => {
+      expect(workbookMocks.writeFile).toHaveBeenCalledTimes(2);
+    });
+    expect(
+      await screen.findByText("Excel budget created successfully."),
+    ).toBeInTheDocument();
   });
 
-  it("blocks an incomplete export and links readiness errors to their source", async () => {
+  it("exports an incomplete draft and links review notes to their source", async () => {
     const user = userEvent.setup();
     await enterLitigationWizard(user);
 
@@ -332,13 +439,117 @@ describe("primary wizard workflow", () => {
 
     expect(
       screen.getByRole("button", { name: "↓ Download Excel" }),
-    ).toBeDisabled();
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "Add a non-zero estimate",
-    );
+    ).toBeEnabled();
+    expect(
+      screen.getByText(/Add a non-zero estimate to at least one selected task/),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "↓ Download Excel" }));
+    await waitFor(() => {
+      expect(workbookMocks.writeFile).toHaveBeenCalledWith(
+        expect.any(Object),
+        "budget_budget.xlsx",
+      );
+    });
     await user.click(
       screen.getAllByRole("button", { name: "Fix in Step 3" })[0],
     );
     expect(screen.getByText("Cost Ranges")).toBeInTheDocument();
   });
+
+  it.each([
+    {
+      name: "an unnamed matter",
+      expectedNote: "Add a matter or client name",
+      expectedFilename: "budget_budget.xlsx",
+      draft: () => createDraft({ matter: { name: "", type: "arbitration" } }),
+    },
+    {
+      name: "an unnamed timekeeper",
+      expectedNote: "Name the Partner used in this budget",
+      draft: () =>
+        createDraft({
+          timekeepers: [
+            { id: "partner", name: "", title: "Partner", rate: 900 },
+          ],
+        }),
+    },
+    {
+      name: "no selected work",
+      expectedNote: "Select at least one task",
+      draft: () =>
+        createDraft({
+          phases: buildPhases("arbitration", "litigation").map((phase) => ({
+            ...phase,
+            selected: false,
+          })),
+        }),
+    },
+    {
+      name: "an inverted direct-cost range",
+      expectedNote: "low estimate greater than its high estimate",
+      draft: () => {
+        const phases = buildPhases("arbitration", "litigation");
+        phases[0].tasks[0] = { ...phases[0].tasks[0], low: 2000, high: 1000 };
+        return createDraft({ phases });
+      },
+    },
+    {
+      name: "a missing timekeeper rate",
+      expectedNote: "without a billing rate",
+      draft: () => {
+        const phases = buildPhases("arbitration", "litigation");
+        phases[0].tasks[0] = {
+          ...phases[0].tasks[0],
+          tkBreakdown: [{ tkId: "partner", hoursLow: 1, hoursHigh: 2 }],
+        };
+        return createDraft({
+          phases,
+          timekeepers: [
+            { id: "partner", name: "Pat", title: "Partner", rate: "" },
+          ],
+        });
+      },
+    },
+    {
+      name: "an inverted timekeeper-hours range",
+      expectedNote: "low hours greater than high hours",
+      draft: () => {
+        const phases = buildPhases("arbitration", "litigation");
+        phases[0].tasks[0] = {
+          ...phases[0].tasks[0],
+          tkBreakdown: [{ tkId: "partner", hoursLow: 2, hoursHigh: 1 }],
+        };
+        return createDraft({
+          phases,
+          timekeepers: [
+            { id: "partner", name: "Pat", title: "Partner", rate: 900 },
+          ],
+        });
+      },
+    },
+  ])(
+    "exports a draft with $name",
+    async ({
+      expectedFilename = "Draft_export_budget.xlsx",
+      expectedNote,
+      draft,
+    }) => {
+      const user = userEvent.setup();
+      await openDraftReview(user, draft());
+
+      expect(
+        screen.getByText(expectedNote, { exact: false }),
+      ).toBeInTheDocument();
+      await user.click(
+        screen.getByRole("button", { name: "↓ Download Excel" }),
+      );
+
+      await waitFor(() => {
+        expect(workbookMocks.writeFile).toHaveBeenCalledWith(
+          expect.any(Object),
+          expectedFilename,
+        );
+      });
+    },
+  );
 });

@@ -3325,7 +3325,7 @@ const readAIRouting = () => {
   }
 };
 
-export default function App() {
+export default function App({ loadWorkbook = () => import("xlsx-js-style") }) {
   const [initialDraftResult] = useState(() => readDraft(localStorage));
   const initialDraft = initialDraftResult.draft;
   const savedMode = initialDraft?.mode || null;
@@ -3370,6 +3370,7 @@ export default function App() {
         : MATTER_LABELS;
   const [exportStatus, setExportStatus] = useState("idle");
   const [exportError, setExportError] = useState("");
+  const exportGenerationRef = useRef(0);
   const [newCaveat, setNewCaveat] = useState("");
   const [newTaskName, setNewTaskName] = useState({});
   const [timelineMode, setTimelineMode] = useState(
@@ -3384,6 +3385,12 @@ export default function App() {
   const [persistenceEnabled, setPersistenceEnabled] = useState(
     initialDraftResult.status !== "unavailable",
   );
+
+  const resetExportFeedback = () => {
+    exportGenerationRef.current += 1;
+    setExportStatus("idle");
+    setExportError("");
+  };
 
   // Persist only an acknowledged, active draft. Landing navigation is transient.
   useEffect(() => {
@@ -3435,6 +3442,7 @@ export default function App() {
   }, [aiRouting]);
 
   const hydrateDraft = (draft) => {
+    resetExportFeedback();
     setPersistenceEnabled(true);
     setMatter(draft.matter);
     setPhases(draft.phases);
@@ -3477,6 +3485,7 @@ export default function App() {
         "Local draft storage is unavailable. This session will not be saved.",
       );
     }
+    resetExportFeedback();
     const nextMatter = defaultMatterForMode(nextMode);
     setMatter(nextMatter);
     setPhases(buildPhases(nextMatter.type, nextMode));
@@ -3546,6 +3555,7 @@ export default function App() {
         "Local draft storage is unavailable. This session will not be saved.",
       );
     }
+    resetExportFeedback();
     setMode(null);
     setAcknowledged(false);
   };
@@ -3945,18 +3955,12 @@ export default function App() {
   // ── Excel Export ──────────────────────────────────────────────────────────
 
   const exportExcel = async () => {
-    if (
-      reviewBudget({ matter, phases, timekeepers }).some(
-        (issue) => issue.severity === "error",
-      )
-    ) {
-      setExportError("Resolve the readiness errors before exporting.");
-      return;
-    }
+    const exportGeneration = exportGenerationRef.current;
     setExportStatus("loading");
     setExportError("");
     try {
-      const module = await import("xlsx-js-style");
+      const module = await loadWorkbook();
+      if (exportGeneration !== exportGenerationRef.current) return;
       const XLSX = module.default || module;
       const wb = XLSX.utils.book_new();
       const ws = {};
@@ -4397,9 +4401,11 @@ export default function App() {
       XLSX.utils.book_append_sheet(wb, ws, "Budget");
       const filename = `${(matter.name || "budget").replace(/\s+/g, "_")}_budget.xlsx`;
       XLSX.writeFile(wb, filename);
+      if (exportGeneration !== exportGenerationRef.current) return;
       setExportStatus("success");
     } catch (error) {
       console.error("Excel export failed", error);
+      if (exportGeneration !== exportGenerationRef.current) return;
       setExportError(
         "Excel export failed. Your draft is still saved; try again.",
       );
@@ -5995,9 +6001,6 @@ export default function App() {
   const Step6 = () => {
     const T = totals();
     const readinessIssues = reviewBudget({ matter, phases, timekeepers });
-    const blockingIssues = readinessIssues.filter(
-      (issue) => issue.severity === "error",
-    );
     return (
       <div>
         <div className="ai-workflow-card ai-workflow-card--compact">
@@ -6042,7 +6045,7 @@ export default function App() {
           />
         </div>
         <div style={s.card}>
-          <div style={s.sectionTitle}>Export Readiness</div>
+          <div style={s.sectionTitle}>Export Review</div>
           {readinessIssues.length === 0 ? (
             <div
               role="status"
@@ -6053,7 +6056,7 @@ export default function App() {
                 lineHeight: 1.5,
               }}
             >
-              Ready to export. Required budget integrity checks passed.
+              No review notes. Your budget is ready to export.
             </div>
           ) : (
             <>
@@ -6066,10 +6069,10 @@ export default function App() {
                   lineHeight: 1.5,
                 }}
               >
-                Errors block export. Warnings are worth reviewing but do not
-                prevent it.
+                Review these notes before sharing a final budget. You can
+                download an Excel draft at any time.
               </div>
-              <div role={blockingIssues.length ? "alert" : "status"}>
+              <div role="status">
                 {readinessIssues.map((issue) => (
                   <div
                     key={issue.id}
@@ -6869,7 +6872,7 @@ export default function App() {
         <button
           style={{ ...s.btn(true), width: "100%" }}
           onClick={exportExcel}
-          disabled={exportStatus === "loading" || blockingIssues.length > 0}
+          disabled={exportStatus === "loading"}
         >
           {exportStatus === "loading"
             ? "Preparing Excel…"
